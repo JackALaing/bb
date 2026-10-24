@@ -725,6 +725,27 @@ too (today only timeline rows are). Settle whether a row persisted with a
 namespaced glyph should ever be rewritten when the plugin renames or removes
 the icon; today it simply falls back.
 
+## `bb.experimental_cssScope` (manifest)
+
+`"owned"` makes `bb plugin build` scope the plugin's Tailwind utilities to
+`:where([data-bb-plugin="<id>"])` instead of
+`:where([data-bb-plugin="<id>"],[data-bb-plugin-root]:not([data-bb-plugin]))`.
+Absent keeps the anonymous-root arm for plugins whose vendored portal scope
+predates the `__BB_PLUGIN_ID__` stamp. Plugin slots, panel headers, host
+shared-ui overlays rendered in plugin context, and shared-ui/registry portals
+built into the plugin stamp the id. Known exception: the host image lightbox
+(`experimental_ImageLightbox`) stamps an id-less root until its portal uses the
+app `portal-scope`; it renders no plugin markup, so owned scoping only stops
+plugin utilities from matching inside it. bb does not check the declaration.
+No core caller: the key changes only the plugin's own build output.
+
+Docs: `quickstart.md`.
+
+Before stabilizing, decide whether owned scoping should become the default
+for plugins declaring a minimum SDK, whether the build should detect
+hand-written id-less roots, and whether the anonymous arm can be retired
+after an audit of marketplace plugins' portal producers.
+
 ## `experimental_buildBridgeToolCallContent`
 
 **Kept experimental (2026-08-22).** Drop the legacy input and settle the image

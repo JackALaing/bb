@@ -372,6 +372,103 @@ describe("plugin app runtime shim", () => {
     expect(css).toContain("@keyframes bb71-authored-pulse");
   });
 
+  async function buildPortalFixture(
+    name: string,
+    appSource: string,
+    cssScope?: string,
+  ) {
+    const dir = await mkdtemp(join(tmpdir(), `bb-plugin-${name}-`));
+    tempDirs.push(dir);
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: `bb-plugin-${name}`,
+        version: "0.0.0",
+        bb: {
+          name: "Portal fixture",
+          description: "Verifies how portal roots match the CSS scope.",
+          branding: { icon: "Layers" },
+          server: "./server.ts",
+          app: "./app.ts",
+          ...(cssScope === undefined
+            ? {}
+            : { experimental_cssScope: cssScope }),
+        },
+      }),
+    );
+    await writeFile(
+      join(dir, "server.ts"),
+      "export default function plugin() {}\n",
+    );
+    await writeFile(
+      join(dir, "portal-scope.ts"),
+      await readFile(
+        new URL("../../shared-ui/src/lib/portal-scope.ts", import.meta.url),
+        "utf8",
+      ),
+    );
+    await writeFile(join(dir, "app.ts"), appSource);
+    return buildPluginApp(dir, "0.9.0-test", await testToolchain());
+  }
+
+  const OWNED_PORTAL_APP =
+    'import { usePortalScopeProps } from "./portal-scope";\n' +
+    'export const portalClass = "flex-col";\n' +
+    "export default usePortalScopeProps();\n";
+  const ANONYMOUS_PORTAL_APP =
+    "export function usePortalScopeProps() {\n" +
+    '  return { "data-bb-portaled-overlay": "", "data-bb-plugin-root": "" };\n' +
+    "}\n" +
+    'export const portalClass = "flex-col";\n';
+  const MIXED_PORTAL_APP =
+    'import { usePortalScopeProps } from "./portal-scope";\n' +
+    'export const portalClass = "flex-col";\n' +
+    "export const owned = usePortalScopeProps();\n" +
+    'export const anonymous = { "data-bb-portaled-overlay": "", "data-bb-plugin-root": "" };\n';
+
+  it.each([
+    ["legacy-portal", ANONYMOUS_PORTAL_APP],
+    ["mixed-portal", MIXED_PORTAL_APP],
+    ["owned-portal", OWNED_PORTAL_APP],
+  ])(
+    "keeps anonymous plugin roots in the utility scope by default (%s)",
+    async (name, appSource) => {
+      const result = await buildPortalFixture(name, appSource);
+      const css = await readFile(result.cssPath, "utf8");
+      const scope = `:where([data-bb-plugin=${name}],[data-bb-plugin-root]:not([data-bb-plugin]))`;
+      expect(css).toContain(`${scope} .flex-col`);
+      expect(css).toContain(`${scope}.flex-col`);
+      expect(result.migrationWarnings).toEqual([]);
+    },
+  );
+
+  it("scopes utilities to the owning plugin id only when the manifest opts in", async () => {
+    const result = await buildPortalFixture(
+      "opted-in-portal",
+      OWNED_PORTAL_APP,
+      "owned",
+    );
+    const loaded = (await import(pathToFileURL(result.jsPath).href)) as {
+      default: Record<string, string>;
+    };
+    expect(loaded.default).toEqual({
+      "data-bb-portaled-overlay": "",
+      "data-bb-plugin-root": "",
+      "data-bb-plugin": "opted-in-portal",
+    });
+    const css = await readFile(result.cssPath, "utf8");
+    const scope = ":where([data-bb-plugin=opted-in-portal])";
+    expect(css).toContain(`${scope} .flex-col`);
+    expect(css).toContain(`${scope}.flex-col`);
+    expect(css).not.toContain("data-bb-plugin-root");
+  });
+
+  it("rejects an unknown css scope", async () => {
+    await expect(
+      buildPortalFixture("bad-scope", OWNED_PORTAL_APP, "global"),
+    ).rejects.toThrow(/experimental_cssScope/);
+  });
+
   it("builds retired tab registrations alongside retired hooks and returns migration warnings", async () => {
     const dir = await mkdtemp(join(tmpdir(), "bb-plugin-legacy-tabs-"));
     tempDirs.push(dir);

@@ -111,6 +111,18 @@ the current engine values and the entries for its generated surfaces.
   masks (web) or tinted SVG views (mobile), so ship monochrome shapes. How a
   persisted row's glyph is checked and what it falls back to is the
   presentation contract in `docs/provider-plugin-api.md` §3.
+- `bb.experimental_cssScope` (optional) — `"owned"` scopes the plugin's
+  Tailwind utilities to elements carrying its own `data-bb-plugin="<id>"`.
+  By default they also match any `data-bb-plugin-root` that has no plugin id,
+  which keeps portals from older vendored `lib/portal-scope` copies styled
+  but lets every plugin's utilities match every anonymous root, so each
+  style recalculation does more selector matching. Opt in only when every
+  element the plugin portals or mounts outside its slot gets its attributes
+  from the current `lib/portal-scope` (`usePortalScopeProps`) or the
+  shared-ui/registry overlay components. bb does not check this; a
+  hand-written root without the id loses its utilities. Do not rely on the
+  plugin's utilities inside `experimental_ImageLightbox`. Declare
+  `engines.bbPluginSdk: ">=0.6.81"`: older hosts reject the key.
 - `engines.bb` — optional compatibility range checked at load and during
   update selection against the BB app version. Dev builds (bb `0.0.0`) skip
   enforcing it and annotate that on check results.

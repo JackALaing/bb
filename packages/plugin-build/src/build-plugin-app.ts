@@ -282,6 +282,7 @@ interface PluginAppConfig {
   appEntry: string;
   packageName: string;
   pluginVersion: string;
+  ownedRootsOnly: boolean;
 }
 
 type ScannerSource = {
@@ -397,12 +398,13 @@ async function readPluginAppConfig(rootDir: string): Promise<PluginAppConfig> {
     appEntry,
     packageName: manifest.name,
     pluginVersion: manifest.version,
+    ownedRootsOnly: manifest.bb.experimental_cssScope === "owned",
   };
 }
 
 async function buildTailwindCss(
   rootDir: string,
-  pluginId: string,
+  scopeRoots: string,
   toolchain: PluginBuildToolchain,
   dependencySources: ScannerSource[],
   bundledInputs: ReadonlySet<string>,
@@ -468,10 +470,7 @@ async function buildTailwindCss(
       candidates.add(candidate);
     }
   }
-  return scopePluginUtilities(
-    compiler.build([...candidates]),
-    pluginScopeRoots(pluginId),
-  );
+  return scopePluginUtilities(compiler.build([...candidates]), scopeRoots);
 }
 
 async function bundledInputPaths(
@@ -511,7 +510,7 @@ export async function buildPluginApp(
   toolchain: PluginBuildToolchain,
   options: PluginAppBuildOptions = { minify: true },
 ): Promise<PluginAppBuildResult> {
-  const { appEntry, packageName, pluginVersion } =
+  const { appEntry, packageName, pluginVersion, ownedRootsOnly } =
     await readPluginAppConfig(rootDir);
   const pluginId = derivePluginId(packageName);
   const dependencySources = await readDependencyTailwindSources(rootDir);
@@ -578,7 +577,7 @@ export async function buildPluginApp(
     const tailwindCss = (
       await buildTailwindCss(
         rootDir,
-        pluginId,
+        pluginScopeRoots(pluginId, ownedRootsOnly),
         toolchain,
         dependencySources,
         bundledInputs,

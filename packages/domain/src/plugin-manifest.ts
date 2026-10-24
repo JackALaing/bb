@@ -112,6 +112,7 @@ const pluginBbManifestSchema = z
           .strict(),
       )
       .optional(),
+    experimental_cssScope: z.enum(["owned"]).optional(),
   })
   .strict();
 

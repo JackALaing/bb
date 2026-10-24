@@ -12,8 +12,14 @@ interface Statement {
   body: string | null;
 }
 
-export function pluginScopeRoots(pluginId: string): string {
-  return `[data-bb-plugin="${pluginId}"], [data-bb-plugin-root]:not([data-bb-plugin])`;
+export function pluginScopeRoots(
+  pluginId: string,
+  ownedRootsOnly = false,
+): string {
+  const owned = `[data-bb-plugin="${pluginId}"]`;
+  return ownedRootsOnly
+    ? owned
+    : `${owned}, [data-bb-plugin-root]:not([data-bb-plugin])`;
 }
 
 export function scopePluginUtilities(css: string, scopeRoots: string): string {

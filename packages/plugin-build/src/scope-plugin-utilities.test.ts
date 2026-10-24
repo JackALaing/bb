@@ -12,9 +12,23 @@ function scopeUtilities(utilities: string): string {
 }
 
 describe("scopePluginUtilities", () => {
-  it("preserves owned and anonymous portal roots", () => {
+  it("preserves owned and anonymous portal roots by default", () => {
     expect(pluginScopeRoots("demo")).toBe(
       '[data-bb-plugin="demo"], [data-bb-plugin-root]:not([data-bb-plugin])',
+    );
+  });
+
+  it("keeps only the owned root for plugins that opt in, still without specificity", () => {
+    const owned = pluginScopeRoots("demo", true);
+    expect(owned).toBe('[data-bb-plugin="demo"]');
+    const scope = `:where(${owned})`;
+    expect(
+      scopePluginUtilities(
+        "@layer utilities{.flex-col{flex-direction:column}}",
+        owned,
+      ),
+    ).toBe(
+      `@layer utilities{${scope} .flex-col{flex-direction:column}${scope}.flex-col{flex-direction:column}}`,
     );
   });
 
