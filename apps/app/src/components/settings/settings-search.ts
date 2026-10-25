@@ -59,6 +59,10 @@ export const SETTINGS_SEARCH_INDEX: Record<
         keywords: ["history", "clear context"],
       },
       {
+        title: "Show messages between agents",
+        keywords: ["thread tell", "child threads", "coordination", "hide"],
+      },
+      {
         title: "Setup guide",
         keywords: ["onboarding", "getting started", "welcome"],
       },

@@ -28,6 +28,7 @@ import {
   buildTimelineViewRows,
   createTimelineViewRowsCache,
   findActiveLatestBundleId,
+  isAgentMessageTimelineRow,
   parseSentThreadMessage,
   workRowGlyph,
   workRowPluginGlyph,
@@ -116,6 +117,7 @@ import {
   SearchMessageLocationProvider,
   useScrollToSearchedMessage,
   useSearchMessageLocation,
+  type SearchMessageLocationTarget,
 } from "./useScrollToSearchedMessage.js";
 import {
   joinSignatureParts,
@@ -183,6 +185,7 @@ export interface ThreadTimelineRowsProps {
   hasOlderTimelineRows?: boolean;
   isLoadingOlderTimelineRows?: boolean;
   onLoadOlderRows?: () => Promise<void> | void;
+  showAgentMessages?: boolean;
   timelineRows: TimelineRow[];
   timelineNavigationTargetRowId?: string | null;
   threadId?: string;
@@ -551,13 +554,157 @@ function useTimelineSearchExpansionRowIds(
   }, [inheritedRowIds, rows, target, threadId]);
 }
 
-function useTimelineViewRowsCache(): GetTimelineViewRows {
-  const cacheRef = useRef(createTimelineViewRowsCache());
-  return useCallback<GetTimelineViewRows>(
-    (rawRows, options) =>
-      buildTimelineViewRows(rawRows, { ...options, cache: cacheRef.current }),
-    [],
+type TimelineHiddenRowPredicate = NonNullable<
+  BuildTimelineViewRowsOptions["hideRow"]
+>;
+
+export interface AgentMessageRevealTarget {
+  navigationTargetRowId: string | null;
+  searchMatch: SearchMessageLocationTarget["match"] | null;
+  searchSeq: number | null;
+}
+
+const NO_REVEAL_TARGET: AgentMessageRevealTarget = {
+  navigationTargetRowId: null,
+  searchMatch: null,
+  searchSeq: null,
+};
+
+function isTimelineNavigationTargetRow(
+  row: TimelineRow,
+  target: AgentMessageRevealTarget,
+): boolean {
+  if (row.id === target.navigationTargetRowId) {
+    return true;
+  }
+  if (target.searchSeq === null) {
+    return false;
+  }
+  if (row.kind === "conversation" && row.messageSeq === target.searchSeq) {
+    return true;
+  }
+  return (
+    target.searchMatch === "sequence" &&
+    row.sourceSeqStart <= target.searchSeq &&
+    target.searchSeq <= row.sourceSeqEnd
   );
+}
+
+function coversSearchSeq(
+  row: TimelineRow,
+  target: AgentMessageRevealTarget,
+): boolean {
+  return (
+    target.searchSeq !== null &&
+    row.sourceSeqStart <= target.searchSeq &&
+    target.searchSeq <= row.sourceSeqEnd
+  );
+}
+
+function targetMayRevealAgentMessage(
+  rows: readonly TimelineRow[],
+  target: AgentMessageRevealTarget,
+): boolean {
+  return rows.some((row) => {
+    if (row.kind === "turn") {
+      return row.children === null
+        ? coversSearchSeq(row, target)
+        : targetMayRevealAgentMessage(row.children, target);
+    }
+    if (row.kind === "work" && row.workKind === "delegation") {
+      return (
+        coversSearchSeq(row, target) ||
+        (row.childRows !== null &&
+          targetMayRevealAgentMessage(row.childRows, target))
+      );
+    }
+    return (
+      isAgentMessageTimelineRow(row) &&
+      isTimelineNavigationTargetRow(row, target)
+    );
+  });
+}
+
+export function resolveAgentMessageRevealTarget(
+  rows: readonly TimelineRow[],
+  target: AgentMessageRevealTarget,
+): AgentMessageRevealTarget {
+  const navigation: AgentMessageRevealTarget = {
+    ...NO_REVEAL_TARGET,
+    navigationTargetRowId: target.navigationTargetRowId,
+  };
+  const search: AgentMessageRevealTarget = {
+    ...NO_REVEAL_TARGET,
+    searchMatch: target.searchMatch,
+    searchSeq: target.searchSeq,
+  };
+  const revealsNavigation =
+    target.navigationTargetRowId !== null &&
+    targetMayRevealAgentMessage(rows, navigation);
+  const revealsSearch =
+    target.searchSeq !== null && targetMayRevealAgentMessage(rows, search);
+  return {
+    navigationTargetRowId: revealsNavigation
+      ? target.navigationTargetRowId
+      : null,
+    searchMatch: revealsSearch ? target.searchMatch : null,
+    searchSeq: revealsSearch ? target.searchSeq : null,
+  };
+}
+
+function buildAgentMessageRowFilter(
+  showAgentMessages: boolean,
+  revealTarget: AgentMessageRevealTarget,
+): TimelineHiddenRowPredicate | undefined {
+  if (showAgentMessages) {
+    return undefined;
+  }
+  return (row) =>
+    isAgentMessageTimelineRow(row) &&
+    !isTimelineNavigationTargetRow(row, revealTarget);
+}
+
+function useAgentMessageRowFilter(
+  rows: readonly TimelineRow[],
+  navigationTargetRowId: string | null,
+  showAgentMessages: boolean,
+): TimelineHiddenRowPredicate | undefined {
+  const { target } = useSearchMessageLocation();
+  const searchMatch = target?.match ?? null;
+  const searchSeq = target?.seq ?? null;
+  const reveal = useMemo(
+    () =>
+      showAgentMessages
+        ? NO_REVEAL_TARGET
+        : resolveAgentMessageRevealTarget(rows, {
+            navigationTargetRowId,
+            searchMatch,
+            searchSeq,
+          }),
+    [navigationTargetRowId, rows, searchMatch, searchSeq, showAgentMessages],
+  );
+  const revealRowId = reveal.navigationTargetRowId;
+  const revealMatch = reveal.searchMatch;
+  const revealSeq = reveal.searchSeq;
+  return useMemo(
+    () =>
+      buildAgentMessageRowFilter(showAgentMessages, {
+        navigationTargetRowId: revealRowId,
+        searchMatch: revealMatch,
+        searchSeq: revealSeq,
+      }),
+    [revealMatch, revealRowId, revealSeq, showAgentMessages],
+  );
+}
+
+function useTimelineViewRowsCache(
+  hideRow: TimelineHiddenRowPredicate | undefined,
+): GetTimelineViewRows {
+  return useMemo<GetTimelineViewRows>(() => {
+    const cache = createTimelineViewRowsCache();
+    return (rawRows, options) =>
+      buildTimelineViewRows(rawRows, { ...options, cache, hideRow });
+  }, [hideRow]);
 }
 
 function shouldRenderCompactActivityIntentRows(
@@ -1389,6 +1536,15 @@ function LazyTurnRowBody({
               onClick={detail.loadEarlier}
             />
           ) : null}
+          {rows.length === 0 &&
+          !detail.hasEarlierRows &&
+          (detail.rows?.length ?? 0) > 0 ? (
+            <TimelineStaticRowHeader>
+              <span className={PAST_ROW_DIM_CLASS_NAME}>
+                Only messages between agents
+              </span>
+            </TimelineStaticRowHeader>
+          ) : null}
           <TimelineRowsList
             rows={rows}
             scopeActive={false}
@@ -2178,13 +2334,20 @@ function ThreadTimelineRowsComponent(props: ThreadTimelineRowsProps) {
   const ownerKey = props.threadId ?? props.timelineRows[0]?.threadId ?? "";
   return (
     <TimelineImageGallery key={ownerKey}>
-      <ThreadTimelineRowsForTimelineView {...props} />
+      <SearchMessageLocationProvider threadId={props.threadId}>
+        <ThreadTimelineRowsForTimelineView {...props} />
+      </SearchMessageLocationProvider>
     </TimelineImageGallery>
   );
 }
 
 function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
-  const getViewRows = useTimelineViewRowsCache();
+  const hideRow = useAgentMessageRowFilter(
+    props.timelineRows,
+    props.timelineNavigationTargetRowId ?? null,
+    props.showAgentMessages ?? true,
+  );
+  const getViewRows = useTimelineViewRowsCache(hideRow);
   const [windowingMeasurements] = useState(() => new Map<string, number>());
   const rows = useMemo(
     () => getViewRows(props.timelineRows),
@@ -2416,74 +2579,72 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
 
   return (
     <CodeFenceRendererRegistryProvider registry={codeFenceRendererRegistry}>
-      <SearchMessageLocationProvider threadId={props.threadId}>
-        <MessageDirectiveRegistryProvider registry={messageDirectiveRegistry}>
-          <TimelineRendererStaticContext.Provider value={staticContextValue}>
-            <SenderThreadMetadataContext.Provider
-              value={senderThreadMetadataById}
+      <MessageDirectiveRegistryProvider registry={messageDirectiveRegistry}>
+        <TimelineRendererStaticContext.Provider value={staticContextValue}>
+          <SenderThreadMetadataContext.Provider
+            value={senderThreadMetadataById}
+          >
+            <LatestActionableAssistantMessageIdContext.Provider
+              value={latestActionableAssistantMessageId}
             >
-              <LatestActionableAssistantMessageIdContext.Provider
-                value={latestActionableAssistantMessageId}
+              <LatestActionableUserMessageIdContext.Provider
+                value={latestActionableUserMessageId}
               >
-                <LatestActionableUserMessageIdContext.Provider
-                  value={latestActionableUserMessageId}
+                <StreamingAssistantMessageIdContext.Provider
+                  value={streamingAssistantMessageId}
                 >
-                  <StreamingAssistantMessageIdContext.Provider
-                    value={streamingAssistantMessageId}
+                  <TimelineTurnStateContext.Provider
+                    value={turnStateContextValue}
                   >
-                    <TimelineTurnStateContext.Provider
-                      value={turnStateContextValue}
+                    <TimelineWindowingMeasurementsContext.Provider
+                      value={windowingMeasurements}
                     >
-                      <TimelineWindowingMeasurementsContext.Provider
-                        value={windowingMeasurements}
-                      >
-                        <div className="relative">
-                          <TimelineRowsList
-                            hasOlderTimelineRows={props.hasOlderTimelineRows}
-                            isLoadingOlderTimelineRows={
-                              props.isLoadingOlderTimelineRows
-                            }
-                            navigationTargetRowId={
-                              props.timelineNavigationTargetRowId
-                            }
-                            onLoadOlderRows={props.onLoadOlderRows}
-                            rows={rows}
-                            scopeActive={scopeActive}
-                            showAssistantMessageActions={true}
-                            compactActivityIntents={false}
-                            spacing="top-level"
-                            unreadDividerAutoScroll={
-                              props.unreadDividerAutoScroll ?? true
-                            }
-                            unreadDividerPlacement={
-                              props.unreadDividerPlacement ?? null
-                            }
-                          />
-                          {hasSelectionActions ? (
-                            <div
-                              ref={setSelectionMenuLayer}
-                              className="pointer-events-none absolute inset-0 z-10 [contain:layout]"
-                            />
-                          ) : null}
-                        </div>
-                      </TimelineWindowingMeasurementsContext.Provider>
-                      {hasSelectionActions ? (
-                        <TimelineSelectionMenu
-                          selection={activeSelection?.selection ?? null}
-                          onAddToChat={selectionAddToChatHandler}
-                          pluginActions={selectionPluginActions}
-                          onDismiss={dismissSelection}
-                          container={selectionMenuLayer}
+                      <div className="relative">
+                        <TimelineRowsList
+                          hasOlderTimelineRows={props.hasOlderTimelineRows}
+                          isLoadingOlderTimelineRows={
+                            props.isLoadingOlderTimelineRows
+                          }
+                          navigationTargetRowId={
+                            props.timelineNavigationTargetRowId
+                          }
+                          onLoadOlderRows={props.onLoadOlderRows}
+                          rows={rows}
+                          scopeActive={scopeActive}
+                          showAssistantMessageActions={true}
+                          compactActivityIntents={false}
+                          spacing="top-level"
+                          unreadDividerAutoScroll={
+                            props.unreadDividerAutoScroll ?? true
+                          }
+                          unreadDividerPlacement={
+                            props.unreadDividerPlacement ?? null
+                          }
                         />
-                      ) : null}
-                    </TimelineTurnStateContext.Provider>
-                  </StreamingAssistantMessageIdContext.Provider>
-                </LatestActionableUserMessageIdContext.Provider>
-              </LatestActionableAssistantMessageIdContext.Provider>
-            </SenderThreadMetadataContext.Provider>
-          </TimelineRendererStaticContext.Provider>
-        </MessageDirectiveRegistryProvider>
-      </SearchMessageLocationProvider>
+                        {hasSelectionActions ? (
+                          <div
+                            ref={setSelectionMenuLayer}
+                            className="pointer-events-none absolute inset-0 z-10 [contain:layout]"
+                          />
+                        ) : null}
+                      </div>
+                    </TimelineWindowingMeasurementsContext.Provider>
+                    {hasSelectionActions ? (
+                      <TimelineSelectionMenu
+                        selection={activeSelection?.selection ?? null}
+                        onAddToChat={selectionAddToChatHandler}
+                        pluginActions={selectionPluginActions}
+                        onDismiss={dismissSelection}
+                        container={selectionMenuLayer}
+                      />
+                    ) : null}
+                  </TimelineTurnStateContext.Provider>
+                </StreamingAssistantMessageIdContext.Provider>
+              </LatestActionableUserMessageIdContext.Provider>
+            </LatestActionableAssistantMessageIdContext.Provider>
+          </SenderThreadMetadataContext.Provider>
+        </TimelineRendererStaticContext.Provider>
+      </MessageDirectiveRegistryProvider>
     </CodeFenceRendererRegistryProvider>
   );
 }

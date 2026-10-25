@@ -112,6 +112,15 @@ General. Machine-related keys (`machineServerUrl`, `defaultMachineAccess`,
   commands): false stops titling shell commands that read, list, or search files
   with a summary such as `Searched for X`. Each command row then shows its
   command and expands to the command and its output.
+- `showAgentMessages` (default true; Settings → General → Show messages
+  between agents): false hides messages this thread sent with
+  `bb thread tell`, messages from other threads, and notices that child
+  threads finished, from the thread timeline. Failed sends,
+  rejected messages, and child failures, interruptions, and requests for
+  attention stay visible. The setting changes display only: agents still
+  receive every message, wakeups and notifications are unchanged, and
+  `bb thread log` and the stored transcript keep the rows. The outline and
+  search still list hidden messages; opening one shows that message in place.
 - `confirmThreadArchive` (default true): set false to archive parent and child
   threads in the app without the confirmation popup; the toast still offers
   Undo. CLI and SDK archive calls are always non-interactive.

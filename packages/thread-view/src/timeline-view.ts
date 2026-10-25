@@ -932,9 +932,16 @@ export function createTimelineViewRowsCache(): TimelineViewRowsCache {
   return new WeakMap();
 }
 
+type TimelineHiddenRowPredicate = (row: TimelineRow) => boolean;
+
+interface TimelineViewRowConversion {
+  cache: TimelineViewRowsCache;
+  hideRow: TimelineHiddenRowPredicate | undefined;
+}
+
 function toTimelineViewWorkRow(
   row: TimelineWorkRow,
-  cache: TimelineViewRowsCache,
+  { cache, hideRow }: TimelineViewRowConversion,
 ): TimelineViewWorkRow {
   if (row.workKind !== "delegation") {
     return row;
@@ -946,27 +953,28 @@ function toTimelineViewWorkRow(
     childRows:
       row.childRows === null
         ? null
-        : buildTimelineViewRows(row.childRows, { cache, closedScope }),
+        : buildTimelineViewRows(row.childRows, { cache, closedScope, hideRow }),
   };
 }
 
 function toTimelineViewRow(
   row: TimelineRow,
-  cache: TimelineViewRowsCache,
+  conversion: TimelineViewRowConversion,
 ): ThreadTimelineViewRow {
   switch (row.kind) {
     case "conversation":
     case "system":
       return row;
     case "work":
-      return toTimelineViewWorkRow(row, cache);
+      return toTimelineViewWorkRow(row, conversion);
     case "turn":
       return {
         ...row,
         children: row.children
           ? buildTimelineViewRows(row.children, {
-              cache,
+              cache: conversion.cache,
               closedScope: true,
+              hideRow: conversion.hideRow,
             })
           : null,
       };
@@ -975,9 +983,25 @@ function toTimelineViewRow(
   }
 }
 
+function isEmptiedTurnRow(
+  row: TimelineRow,
+  viewRow: ThreadTimelineViewRow,
+): boolean {
+  return (
+    row.kind === "turn" &&
+    viewRow.kind === "turn" &&
+    row.status === "completed" &&
+    row.children !== null &&
+    row.children.length > 0 &&
+    viewRow.children !== null &&
+    viewRow.children.length === 0
+  );
+}
+
 export interface BuildTimelineViewRowsOptions {
   closedScope?: boolean;
   cache?: TimelineViewRowsCache;
+  hideRow?: TimelineHiddenRowPredicate;
 }
 
 export function buildTimelineViewRows(
@@ -989,8 +1013,18 @@ export function buildTimelineViewRows(
     const cached = cache.get(rows);
     if (cached) return cached;
   }
-  const childCache = cache ?? createTimelineViewRowsCache();
-  const viewRows = rows.map((row) => toTimelineViewRow(row, childCache));
+  const hideRow = options.hideRow;
+  const conversion: TimelineViewRowConversion = {
+    cache: cache ?? createTimelineViewRowsCache(),
+    hideRow,
+  };
+  const viewRows: ThreadTimelineViewRow[] = [];
+  for (const row of rows) {
+    if (hideRow?.(row)) continue;
+    const viewRow = toTimelineViewRow(row, conversion);
+    if (hideRow !== undefined && isEmptiedTurnRow(row, viewRow)) continue;
+    viewRows.push(viewRow);
+  }
   const result: ThreadTimelineViewRow[] = [];
   let openStep: TimelineWorkSummaryChild[] = [];
 

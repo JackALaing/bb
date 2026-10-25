@@ -322,6 +322,8 @@ export function registerSystemRoutes(
         current.keepHistoryAfterContextClear,
       summarizeShellCommands:
         settings.summarizeShellCommands ?? current.summarizeShellCommands,
+      showAgentMessages:
+        settings.showAgentMessages ?? current.showAgentMessages,
       confirmThreadArchive:
         settings.confirmThreadArchive ?? current.confirmThreadArchive,
       earlyAdopter: settings.earlyAdopter ?? current.earlyAdopter,

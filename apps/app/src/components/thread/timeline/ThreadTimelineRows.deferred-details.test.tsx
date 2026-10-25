@@ -27,13 +27,18 @@ function renderExpandedRow(row: TimelineRow) {
   return renderRow(row, new Set([row.id]));
 }
 
-function renderRow(row: TimelineRow, initialExpanded: ReadonlySet<string>) {
+function renderRow(
+  row: TimelineRow,
+  initialExpanded: ReadonlySet<string>,
+  showAgentMessages = true,
+) {
   const { wrapper: Wrapper } = createQueryClientTestHarness();
   return render(
     <MemoryRouter>
       <Wrapper>
         <ThreadTimelineRows
           initialExpanded={initialExpanded}
+          showAgentMessages={showAgentMessages}
           threadId="thr_main"
           timelineRows={[row]}
           threadRuntimeDisplayStatus="idle"
@@ -144,6 +149,33 @@ describe("deferred timeline details", () => {
       turnId: "turn_1",
     });
     expect(screen.queryByText("Load earlier activity")).toBeNull();
+  });
+
+  it("explains a loaded turn whose activity is only hidden agent messages", async () => {
+    timelineTurnSummaryDetails.mockResolvedValue({
+      olderCursor: null,
+      rows: [
+        commandRow({
+          id: "sent",
+          command: "bb thread tell thr_wrkr234567 'Status?'",
+          exitCode: 0,
+          threadId: "thr_main",
+          turnId: "turn_1",
+        }),
+      ],
+    });
+    const turn = turnRow({
+      sourceSeqEnd: 40,
+      threadId: "thr_main",
+      turnId: "turn_1",
+    });
+
+    renderRow(turn, new Set([turn.id]), false);
+
+    expect(
+      await screen.findByText("Only messages between agents"),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Sent to/)).toBeNull();
   });
 
   it("loads a deferred command's output by item when it is expanded", async () => {

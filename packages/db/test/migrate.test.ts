@@ -1792,6 +1792,7 @@ describe("migrate", () => {
         showDiagnosticEvents: true,
         keepHistoryAfterContextClear: false,
         summarizeShellCommands: true,
+        showAgentMessages: true,
         providerOrder: [],
         defaultProviderId: null,
         providerCompletedTurnDisplay: {},

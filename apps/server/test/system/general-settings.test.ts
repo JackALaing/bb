@@ -287,6 +287,7 @@ it.each([
   "confirmThreadArchive",
   "showGitChanges",
   "summarizeShellCommands",
+  "showAgentMessages",
 ] as const)(
   "persists %s opt-out and preserves it for older clients",
   async (key) => {

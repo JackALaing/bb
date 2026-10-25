@@ -7,6 +7,7 @@ import { ConversationTimeline } from "@/components/ui/conversation.js";
 import { HeightTransition } from "@/components/ui/height-transition.js";
 import { Icon } from "@bb/shared-ui/icon";
 import { isRouteLoadingSkeletonMounted } from "@/components/ui/route-loading-skeleton";
+import { useSystemConfig } from "@/hooks/queries/system-queries";
 import { toUserAttachmentImageSrc } from "@/lib/user-attachment-images";
 import {
   SHORT_LIVED_STATUS_DELAY_MS,
@@ -175,6 +176,8 @@ export function ThreadTimelineSurface({
   unreadDividerPlacement,
   workspaceRootPath,
 }: ThreadTimelineSurfaceProps) {
+  const showAgentMessages =
+    useSystemConfig().data?.generalSettings.showAgentMessages ?? true;
   const showCatchUpIndicator =
     isCatchingUpTimeline &&
     !isThreadTimelinePending &&
@@ -249,6 +252,7 @@ export function ThreadTimelineSurface({
             hasOlderTimelineRows={hasOlderTimelineRows}
             isLoadingOlderTimelineRows={isLoadingOlderTimelineRows}
             onLoadOlderRows={onLoadOlderRows}
+            showAgentMessages={showAgentMessages}
             timelineRows={timelineRowsWithPendingStop}
             timelineNavigationTargetRowId={timelineNavigationTargetRowId}
             threadId={threadId}

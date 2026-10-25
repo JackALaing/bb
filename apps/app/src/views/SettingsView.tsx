@@ -177,6 +177,8 @@ interface GeneralSettingsSectionProps {
   onKeepHistoryAfterContextClearChange: (enabled: boolean) => void;
   summarizeShellCommands: boolean;
   onSummarizeShellCommandsChange: (enabled: boolean) => void;
+  showAgentMessages: boolean;
+  onShowAgentMessagesChange: (enabled: boolean) => void;
   desktopBrowserAvailable: boolean;
   generalSettingsDisabled: boolean;
   managedBranchPrefix: string;
@@ -868,6 +870,8 @@ export function GeneralSettingsSection({
   onKeepHistoryAfterContextClearChange,
   summarizeShellCommands,
   onSummarizeShellCommandsChange,
+  showAgentMessages,
+  onShowAgentMessagesChange,
   desktopBrowserAvailable,
   generalSettingsDisabled,
   managedBranchPrefix,
@@ -987,6 +991,18 @@ export function GeneralSettingsSection({
               disabled={generalSettingsDisabled}
               onCheckedChange={onKeepHistoryAfterContextClearChange}
               aria-label="Show messages from before a context clear"
+            />
+          </SettingsWithControl>
+
+          <SettingsWithControl
+            label="Show messages between agents"
+            description="Show sent messages, received messages, and child-thread completion notices in the timeline. Agents receive these messages regardless."
+          >
+            <Switch
+              checked={showAgentMessages}
+              disabled={generalSettingsDisabled}
+              onCheckedChange={onShowAgentMessagesChange}
+              aria-label="Show messages between agents"
             />
           </SettingsWithControl>
 
@@ -1454,6 +1470,12 @@ export function SettingsView() {
           onSummarizeShellCommandsChange={(enabled) =>
             updateGeneralSettingsMutation.mutate({
               summarizeShellCommands: enabled,
+            })
+          }
+          showAgentMessages={generalSettings.showAgentMessages}
+          onShowAgentMessagesChange={(enabled) =>
+            updateGeneralSettingsMutation.mutate({
+              showAgentMessages: enabled,
             })
           }
           onReplaySetupGuide={() =>
