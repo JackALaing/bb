@@ -17,7 +17,6 @@ import * as radixSelect from "@radix-ui/react-select";
 import * as radixTooltip from "@radix-ui/react-tooltip";
 import * as sonner from "sonner";
 import * as vaul from "vaul";
-import * as pierreDiffs from "@pierre/diffs";
 import * as clsx from "clsx";
 import * as tailwindMerge from "tailwind-merge";
 import * as classVarianceAuthority from "class-variance-authority";
@@ -55,7 +54,7 @@ import {
 } from "./plugin-app-definition";
 import { setPluginAssetIcons } from "@bb/shared-ui/icon-registry";
 import { setPluginLogoUrls, type PluginLogoUrls } from "./plugin-logos";
-import { createGatedPierreDiffsReact } from "./plugin-pierre-diffs-react";
+import { createRetryingModuleLoader } from "./plugin-frontend-lazy";
 import {
   pluginSdkAppImplementation,
   retiredPluginSdkAppMembers,
@@ -81,6 +80,7 @@ interface PluginFrontendBundle {
   sdkMajor: number;
   sdkVersion: string;
   compatible: boolean;
+  runtimeSlots: string[];
 }
 
 export interface PluginFrontendCandidate {
@@ -138,6 +138,7 @@ export type PluginFrontendDiagnostic =
 
 interface PluginFrontendLoaderDeps {
   importModule: (url: string) => Promise<unknown>;
+  prefetchModule: (url: string) => void;
   warn: (message: string) => void;
 }
 
@@ -157,6 +158,19 @@ export async function loadPluginFrontend(
     };
   }
   try {
+    const runtimeGroups = lazyRuntimeGroups.filter((group) =>
+      group.slots.some((slot) => bundle.runtimeSlots.includes(slot)),
+    );
+    if (runtimeGroups.length > 0) {
+      const slotsProvided = Promise.all(
+        runtimeGroups.map(async (group) => {
+          const slots = await group.load();
+          Object.assign(installPluginRuntime(), slots);
+        }),
+      );
+      deps.prefetchModule(bundle.jsUrl);
+      await slotsProvided;
+    }
     const mod = await deps.importModule(bundle.jsUrl);
     if (typeof mod !== "object" || mod === null) {
       throw new Error("bundle did not evaluate to a module namespace");
@@ -194,8 +208,8 @@ interface BbPluginRuntime {
   radixTooltip: unknown;
   sonner: unknown;
   vaul: unknown;
-  pierreDiffs: unknown;
-  pierreDiffsReact: unknown;
+  pierreDiffs?: unknown;
+  pierreDiffsReact?: unknown;
   clsx: unknown;
   tailwindMerge: unknown;
   classVarianceAuthority: unknown;
@@ -206,10 +220,9 @@ interface BbPluginRuntime {
 
 type RuntimeHost = typeof globalThis & { __bbPluginRuntime?: BbPluginRuntime };
 
-export function installPluginRuntime(): void {
+export function installPluginRuntime(): BbPluginRuntime {
   const host = globalThis as RuntimeHost;
-  if (host.__bbPluginRuntime !== undefined) return;
-  host.__bbPluginRuntime = {
+  host.__bbPluginRuntime ??= {
     react,
     reactDom,
     reactDomClient,
@@ -231,8 +244,6 @@ export function installPluginRuntime(): void {
     radixTooltip,
     sonner: { ...sonner, toast: createPluginToast(sonner.toast) },
     vaul,
-    pierreDiffs,
-    pierreDiffsReact: createGatedPierreDiffsReact(),
     clsx,
     tailwindMerge,
     classVarianceAuthority,
@@ -240,7 +251,21 @@ export function installPluginRuntime(): void {
     questionFormHost,
     voiceInputTextarea,
   };
+  return host.__bbPluginRuntime;
 }
+
+const lazyRuntimeGroups = [
+  {
+    slots: ["pierreDiffs", "pierreDiffsReact"],
+    load: createRetryingModuleLoader(async () => {
+      const { pierreRuntimeSlots } = await import("./plugin-pierre-runtime");
+      return pierreRuntimeSlots;
+    }),
+  },
+] satisfies {
+  slots: (keyof BbPluginRuntime)[];
+  load: () => Promise<Partial<BbPluginRuntime>>;
+}[];
 
 export async function fetchFrontendCandidates(
   queryClient: QueryClient = appQueryClient,
@@ -756,7 +781,11 @@ async function reconcileCandidate(
               : appendPluginImportRetry(candidate.bundle.jsUrl, retryCount),
         },
       },
-      { importModule: deps.importModule, warn: deps.warn },
+      {
+        importModule: deps.importModule,
+        prefetchModule: deps.prefetchModule,
+        warn: deps.warn,
+      },
     );
   if (candidate.bundle.cssUrl !== null)
     deps.prefetchCss(candidate.bundle.cssUrl);
