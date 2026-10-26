@@ -30,7 +30,11 @@ afterEach(() => {
   spawnMock.mockReset();
 });
 
-function stubDownloadedSkill(skillId: string, body?: string): void {
+function stubDownloadedSkill(
+  skillId: string,
+  body?: string,
+  asset?: Buffer,
+): void {
   spawnMock.mockImplementation(
     (_command: string, _args: string[], options: { cwd: string }) => {
       const child = new EventEmitter() as EventEmitter & {
@@ -48,6 +52,10 @@ function stubDownloadedSkill(skillId: string, body?: string): void {
           join(skillDirectory, "SKILL.md"),
           body ?? `---\nname: ${skillId}\ndescription: Test skill.\n---\n`,
         );
+        if (asset !== undefined) {
+          await mkdir(join(skillDirectory, "assets"));
+          await writeFile(join(skillDirectory, "assets", "example.bin"), asset);
+        }
         child.emit("close", 0);
       })();
       return child;
@@ -94,6 +102,31 @@ describe("installServerRegistrySkill", () => {
       expect(
         (await new SkillTreeRegistry().readTree(skillDirectory)).files,
       ).toEqual([expect.objectContaining({ path: "SKILL.md" })]);
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("installs a skill whose supporting assets exceed 10 MiB", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "bb-registry-assets-test-"));
+    try {
+      const asset = Buffer.alloc(11 * 1024 * 1024);
+      stubDownloadedSkill("find-skills", undefined, asset);
+
+      await installServerRegistrySkill({
+        dataDir,
+        packageRef: "vercel-labs/skills",
+        registrySkillId: "github.com/vercel-labs/skills/find-skills",
+        skillId: "find-skills",
+      });
+
+      expect(
+        (
+          await stat(
+            join(dataDir, "skills", "find-skills", "assets", "example.bin"),
+          )
+        ).size,
+      ).toBe(asset.length);
     } finally {
       await rm(dataDir, { recursive: true, force: true });
     }

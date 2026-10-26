@@ -297,6 +297,38 @@ describe("injected skill staging", () => {
     );
   });
 
+  it("stages a pulled tree whose supporting assets exceed 10 MiB", async () => {
+    const dataDir = await makeTempDir();
+    const asset = Buffer.alloc(11 * 1024 * 1024, 0x5a);
+    const payload = createTreePayload(
+      "asset-heavy",
+      "Use assets/example.bin as supporting material.",
+      [{ path: "assets/example.bin", mode: 0o644, content: asset }],
+    );
+    const files = [...payload.files].sort((left, right) =>
+      left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+    );
+    const staged = await stageInjectedSkillSources({
+      workspacePath: dataDir,
+      dataDir,
+      skillTreeTransport: {
+        fetchManifest: async () => manifestOf(payload),
+        fetchContent: async () =>
+          chunked(Buffer.concat(files.map((file) => file.content)), 64 * 1024),
+      },
+      injectedSkillSources: [createTreeSource("asset-heavy", payload.treeHash)],
+    });
+    const stagedAsset = await readFile(
+      path.join(
+        requireSkillRoot(staged.skillRoots).path,
+        "asset-heavy",
+        "assets",
+        "example.bin",
+      ),
+    );
+    expect(stagedAsset.equals(asset)).toBe(true);
+  });
+
   it.each([
     { state: "empty directory", files: [] },
     { state: "unfinished directory", files: ["unfinished"] },
