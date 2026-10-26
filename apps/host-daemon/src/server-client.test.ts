@@ -284,24 +284,27 @@ describe("createServerClient", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
-  it("fetches and parses a skill tree over authenticated LAN HTTP", async () => {
+  it("fetches a skill tree manifest and requested content over authenticated LAN HTTP", async () => {
     const treeHash = "a".repeat(64);
+    const manifest = {
+      treeHash,
+      files: [
+        { path: "SKILL.md", mode: 0o644, sizeBytes: 4, sha256: "c".repeat(64) },
+      ],
+    };
     const fetchFn = vi.fn<FetchFn>(async (input, init) => {
       const url = new URL(String(input));
-      expect(url.pathname).toBe(`/internal/skills/tree/${treeHash}`);
       expect(new Headers(init?.headers).get("authorization")).toBe(
         "Bearer host-key",
       );
       expect(new Headers(init?.headers).get("x-bb-connect-machine")).toBeNull();
-      return new Response(
-        JSON.stringify({
-          treeHash,
-          entries: [
-            { path: "SKILL.md", mode: 0o644, contentBase64: "dHJlZQ==" },
-          ],
-        }),
-        { status: 200 },
-      );
+      if (url.pathname === `/internal/skills/tree/${treeHash}`) {
+        return new Response(JSON.stringify(manifest), { status: 200 });
+      }
+      expect(url.pathname).toBe(`/internal/skills/tree/${treeHash}/content`);
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({ paths: ["SKILL.md"] });
+      return new Response("tree", { status: 200 });
     });
     const client = createServerClient({
       fetchFn,
@@ -311,10 +314,12 @@ describe("createServerClient", () => {
       serverUrl: "http://192.168.1.10:3000",
     });
 
-    await expect(client.fetchSkillTree(treeHash)).resolves.toEqual({
-      treeHash,
-      entries: [{ path: "SKILL.md", mode: 0o644, contentBase64: "dHJlZQ==" }],
-    });
+    await expect(client.fetchSkillTreeManifest(treeHash)).resolves.toEqual(
+      manifest,
+    );
+    await expect(
+      readText(await client.fetchSkillTreeContent(treeHash, ["SKILL.md"])),
+    ).resolves.toBe("tree");
   });
 
   it("rejects oversized host artifacts before fetching them", async () => {
@@ -367,7 +372,7 @@ describe("createServerClient", () => {
       const headers = new Headers(init?.headers);
       expect(headers.get("authorization")).toBe("Bearer host-key");
       expect(headers.get("x-bb-connect-machine")).toBe("bbcm_machine");
-      return new Response(JSON.stringify({ treeHash, entries: [] }), {
+      return new Response(JSON.stringify({ treeHash, files: [] }), {
         status: 200,
       });
     });
@@ -380,7 +385,7 @@ describe("createServerClient", () => {
       serverUrl: "https://bb.example.test",
     });
 
-    await client.fetchSkillTree(treeHash);
+    await client.fetchSkillTreeManifest(treeHash);
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 

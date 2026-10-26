@@ -55,6 +55,12 @@ async function writeFully(
   }
 }
 
+async function* readFileChunks(filePath: string): AsyncGenerator<Uint8Array> {
+  for await (const chunk of createReadStream(filePath)) {
+    yield chunk as Buffer;
+  }
+}
+
 export async function writeVerifiedFile(args: {
   destinationPath: string;
   expected: VerifiedFileExpectation;
@@ -96,6 +102,22 @@ export async function writeVerifiedFile(args: {
   }
 }
 
+export async function copyVerifiedFile(args: {
+  destinationPath: string;
+  expected: VerifiedFileExpectation;
+  label: string;
+  mode: number;
+  sourcePath: string;
+}): Promise<WrittenFile> {
+  return writeVerifiedFile({
+    destinationPath: args.destinationPath,
+    expected: args.expected,
+    label: args.label,
+    mode: args.mode,
+    source: readFileChunks(args.sourcePath),
+  });
+}
+
 export async function hashFile(filePath: string): Promise<WrittenFile> {
   const hash = createHash("sha256");
   let sizeBytes = 0;
@@ -131,5 +153,56 @@ export async function publishFileWithoutReplacing(
     if (isFsErrorWithCode(error, "EEXIST")) return false;
     await fs.rm(destinationPath, { force: true }).catch(() => undefined);
     throw error;
+  }
+}
+
+export async function* takeExactBytes(
+  reader: ChunkReader,
+  byteLength: number,
+): AsyncGenerator<Uint8Array> {
+  let remaining = byteLength;
+  while (remaining > 0) {
+    const chunk = await reader.read(remaining);
+    if (chunk === null) {
+      throw new FileTransferVerificationError(
+        `Transfer ended ${remaining} bytes early`,
+      );
+    }
+    remaining -= chunk.byteLength;
+    yield chunk;
+  }
+}
+
+export class ChunkReader {
+  readonly #iterator: AsyncIterator<Uint8Array>;
+  #pending: Uint8Array | null = null;
+
+  constructor(source: AsyncIterable<Uint8Array>) {
+    this.#iterator = source[Symbol.asyncIterator]();
+  }
+
+  async read(maxBytes: number): Promise<Uint8Array | null> {
+    let chunk = this.#pending;
+    this.#pending = null;
+    while (chunk === null || chunk.byteLength === 0) {
+      const next = await this.#iterator.next();
+      if (next.done) return null;
+      chunk = next.value;
+    }
+    if (chunk.byteLength <= maxBytes) return chunk;
+    this.#pending = chunk.subarray(maxBytes);
+    return chunk.subarray(0, maxBytes);
+  }
+
+  async assertEnded(): Promise<void> {
+    if ((await this.read(1)) !== null) {
+      throw new FileTransferVerificationError(
+        "Transfer returned more bytes than requested",
+      );
+    }
+  }
+
+  async cancel(): Promise<void> {
+    await this.#iterator.return?.();
   }
 }

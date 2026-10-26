@@ -8,7 +8,7 @@ import {
   hostDaemonInteractiveInterruptResponseSchema,
   hostDaemonInteractiveRequestResponseSchema,
   hostDaemonSessionOpenResponseSchema,
-  hostDaemonSkillTreeSchema,
+  hostDaemonSkillTreeManifestSchema,
   hostDaemonToolCallResponseSchema,
   type HostDaemonInteractiveInterruptResponse,
   type HostDaemonInteractiveRequestResponse,
@@ -24,7 +24,8 @@ import {
   type HostDaemonSessionOpenResponse,
   type HostDaemonToolCallRequest,
   type HostDaemonToolCallResponse,
-  type HostDaemonSkillTree,
+  type HostDaemonSkillTreeContentRequest,
+  type HostDaemonSkillTreeManifest,
 } from "@bb/host-daemon-contract";
 import { HOST_ARTIFACT_MAX_BYTES } from "@bb/host-daemon-contract/protocol";
 import type { PendingInteractionCreate, ToolCallRequest } from "@bb/domain";
@@ -203,7 +204,13 @@ export interface ServerClient {
   fetchProjectAttachment(
     args: FetchProjectAttachmentArgs,
   ): Promise<FetchedProjectAttachment>;
-  fetchSkillTree(treeHash: string): Promise<HostDaemonSkillTree>;
+  fetchSkillTreeManifest(
+    treeHash: string,
+  ): Promise<HostDaemonSkillTreeManifest>;
+  fetchSkillTreeContent(
+    treeHash: string,
+    paths: readonly string[],
+  ): Promise<AsyncIterable<Uint8Array>>;
   fetchPluginHostArtifact(args: {
     pluginId: string;
     digest: string;
@@ -489,15 +496,34 @@ export function createServerClient(
       return { content: responseContent(response) };
     },
 
-    async fetchSkillTree(treeHash: string): Promise<HostDaemonSkillTree> {
+    async fetchSkillTreeManifest(
+      treeHash: string,
+    ): Promise<HostDaemonSkillTreeManifest> {
       const response = await fetchFn(
         buildInternalUrl(`/skills/tree/${encodeURIComponent(treeHash)}`),
         { method: "GET", headers: headers() },
       );
       if (!response.ok) {
-        throw await createResponseError("fetch skill tree", response);
+        throw await createResponseError("fetch skill tree manifest", response);
       }
-      return hostDaemonSkillTreeSchema.parse(await response.json());
+      return hostDaemonSkillTreeManifestSchema.parse(await response.json());
+    },
+
+    async fetchSkillTreeContent(
+      treeHash: string,
+      paths: readonly string[],
+    ): Promise<AsyncIterable<Uint8Array>> {
+      const payload: HostDaemonSkillTreeContentRequest = { paths: [...paths] };
+      const response = await fetchFn(
+        buildInternalUrl(
+          `/skills/tree/${encodeURIComponent(treeHash)}/content`,
+        ),
+        { method: "POST", headers: headers(), body: JSON.stringify(payload) },
+      );
+      if (!response.ok) {
+        throw await createResponseError("fetch skill tree content", response);
+      }
+      return responseContent(response);
     },
 
     async fetchPluginHostArtifact(args): Promise<Uint8Array> {
