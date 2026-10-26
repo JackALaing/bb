@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+
+import { renderHook } from "@testing-library/react";
 import { buildTimelineViewRows } from "@bb/thread-view";
 import { describe, expect, it } from "vitest";
 import type { TimelineRow } from "@bb/server-contract";
@@ -7,7 +10,10 @@ import {
   turnRow,
 } from "@/test/fixtures/thread-timeline-rows";
 import type { ThreadTimelineUnreadDividerPlacement } from "./types";
-import { buildTimelineRowsListItems } from "./ThreadTimelineRows";
+import {
+  buildTimelineRowsListItems,
+  useLoadedUnreadDividerPlacement,
+} from "./ThreadTimelineRows";
 
 const DIVIDER = "__divider__";
 
@@ -69,7 +75,7 @@ describe("unread divider placement", () => {
         command(400),
         assistantMessage(500),
       ],
-      { kind: "after-cutoff", cutoffAt: 350 },
+      { cutoffAt: 350 },
     );
 
     expect(sequence).toEqual(["user", "step-summary", DIVIDER, "assistant"]);
@@ -84,7 +90,7 @@ describe("unread divider placement", () => {
         command(500),
         assistantMessage(600),
       ],
-      { kind: "after-cutoff", cutoffAt: 300 },
+      { cutoffAt: 300 },
     );
 
     expect(sequence).toEqual([
@@ -111,7 +117,7 @@ describe("unread divider placement", () => {
         }),
         assistantMessage(500),
       ],
-      { kind: "after-cutoff", cutoffAt: 350 },
+      { cutoffAt: 350 },
     );
 
     expect(collapsed).toEqual(["user", "turn", DIVIDER, "assistant"]);
@@ -120,7 +126,7 @@ describe("unread divider placement", () => {
   it("never anchors the divider on the reader's own message", () => {
     const sequence = renderTopLevelSequence(
       [assistantMessage(100), userMessage(400), command(500)],
-      { kind: "after-cutoff", cutoffAt: 300 },
+      { cutoffAt: 300 },
     );
 
     expect(sequence).toEqual(["assistant", "user", DIVIDER, "work"]);
@@ -129,18 +135,59 @@ describe("unread divider placement", () => {
   it("omits the divider when no row started after the cutoff", () => {
     const sequence = renderTopLevelSequence(
       [userMessage(100), command(200), assistantMessage(300)],
-      { kind: "after-cutoff", cutoffAt: 400 },
+      { cutoffAt: 400 },
     );
 
     expect(sequence).not.toContain(DIVIDER);
   });
+});
 
-  it("places the divider above the first row for an explicitly unread thread", () => {
-    const sequence = renderTopLevelSequence(
-      [userMessage(100), command(200), assistantMessage(300)],
-      { kind: "before-first" },
+describe("loaded unread divider placement", () => {
+  it("drops a divider whose cutoff is older than the loaded rows, and keeps it dropped after older rows load", () => {
+    const placement = { cutoffAt: 350 };
+    const latestPage = buildTimelineViewRows([
+      command(400),
+      assistantMessage(500),
+    ]);
+    const { result, rerender } = renderHook(
+      (props: Parameters<typeof useLoadedUnreadDividerPlacement>[0]) =>
+        useLoadedUnreadDividerPlacement(props),
+      {
+        initialProps: {
+          hasOlderRows: true,
+          rows: latestPage,
+          unreadDividerPlacement: placement,
+        },
+      },
     );
+    expect(result.current).toBeNull();
 
-    expect(sequence[0]).toBe(DIVIDER);
+    rerender({
+      hasOlderRows: false,
+      rows: buildTimelineViewRows([
+        userMessage(100),
+        command(200),
+        command(400),
+        assistantMessage(500),
+      ]),
+      unreadDividerPlacement: placement,
+    });
+    expect(result.current).toBeNull();
+  });
+
+  it("keeps a divider whose cutoff falls inside the loaded rows", () => {
+    const placement = { cutoffAt: 350 };
+    const { result } = renderHook(() =>
+      useLoadedUnreadDividerPlacement({
+        hasOlderRows: true,
+        rows: buildTimelineViewRows([
+          userMessage(300),
+          command(400),
+          assistantMessage(500),
+        ]),
+        unreadDividerPlacement: placement,
+      }),
+    );
+    expect(result.current).toBe(placement);
   });
 });

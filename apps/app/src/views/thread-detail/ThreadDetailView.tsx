@@ -56,10 +56,7 @@ import {
 import { useForkThreadFromMessage } from "@/hooks/useForkThreadFromMessage";
 import { isThreadForkable } from "@bb/client-core";
 import { useRequestEnvironmentAction } from "../../hooks/mutations/environment-mutations";
-import {
-  useMarkThreadRead,
-  useUpdateThread,
-} from "../../hooks/mutations/thread-state-mutations";
+import { useUpdateThread } from "../../hooks/mutations/thread-state-mutations";
 import {
   useEditThreadMessage,
   useSendThreadMessage,
@@ -74,11 +71,9 @@ import {
   type ChildThreadPendingAttentionSource,
 } from "../../hooks/queries/child-thread-pending-interactions";
 import {
-  didThreadDetailBootstrapRefreshAfterMount,
   useChildThreads,
   useProjectThreadSubset,
   useThread,
-  useThreadDetailBootstrap,
   useThreadPendingInteractions,
   type ProjectThreadSubsetFilters,
 } from "../../hooks/queries/thread-queries";
@@ -233,8 +228,7 @@ import type {
 } from "@/components/secondary-panel/ThreadSecondaryPanel";
 import { useEnvironmentMergeBase } from "@/components/secondary-panel/git-diff/useEnvironmentMergeBase";
 import { useThreadGitActions } from "./useThreadGitActions";
-import { useThreadReadTracking } from "@/hooks/useThreadReadTracking";
-import { useThreadUnreadDividerState } from "./useThreadUnreadDividerState";
+import { useThreadDetailThread } from "./useThreadDetailThread";
 import {
   buildTerminalSyncedSecondaryFileTabs,
   syncTerminalTabsInFixedPanelState,
@@ -464,22 +458,12 @@ function ThreadDetailViewInternal(
   const navigate = useImmediateRouteNavigate();
   useFixedPanelTabsStorageMaintenance();
   const systemConfigQuery = useSystemConfig();
-  const threadDetailBootstrapQuery = useThreadDetailBootstrap(threadId);
-  const hasThreadDetailBootstrapSettled =
-    threadDetailBootstrapQuery.isSuccess || threadDetailBootstrapQuery.isError;
   const {
-    data: thread,
-    isFetching,
-    isLoadingError,
-    error,
-  } = useThread(threadId, {
-    enabled: hasThreadDetailBootstrapSettled,
-    refetchOnMount: didThreadDetailBootstrapRefreshAfterMount(
-      threadDetailBootstrapQuery,
-    )
-      ? false
-      : "always",
-  });
+    hasThreadDetailBootstrapSettled,
+    threadDetailBootstrapQuery,
+    threadQuery: { data: thread, isFetching, isLoadingError, error },
+    unreadDividerState,
+  } = useThreadDetailThread(threadId, timelineEnabled);
   const environmentQuery = useEnvironment(thread?.environmentId, {
     enabled: hasThreadDetailBootstrapSettled,
     staleTime: 5_000,
@@ -574,10 +558,6 @@ function ThreadDetailViewInternal(
   );
   const pendingInteractions = pendingInteractionsQuery.data ?? [];
   const hasPendingInteraction = pendingInteractions.length > 0;
-  const unreadDividerState = useThreadUnreadDividerState({
-    routeThreadId: threadId,
-    thread,
-  });
   const [hasRequestedMergeBaseOptions, setHasRequestedMergeBaseOptions] =
     useState(false);
   const [shouldAutoFocusNewTab, setShouldAutoFocusNewTab] = useState(false);
@@ -771,7 +751,6 @@ function ThreadDetailViewInternal(
   const sendMessage = useSendThreadMessage();
   const editMessage = useEditThreadMessage();
   const requestEnvironmentAction = useRequestEnvironmentAction();
-  const markThreadRead = useMarkThreadRead();
   const updateEnvironment = useUpdateEnvironment();
   const updateThread = useUpdateThread({
     errorMessage: "Failed to assign parent thread.",
@@ -1767,10 +1746,6 @@ function ThreadDetailViewInternal(
       return { ...childThreadsSection, pendingInteractions };
     }, [childThreadsSection, childPendingInteractions]);
   const isThreadTimelinePending = timelineLoading && timelineRows.length === 0;
-  useThreadReadTracking({
-    markThreadRead,
-    thread: timelineEnabled ? thread : undefined,
-  });
   const {
     effectiveMergeBaseBranch,
     handleMergeBaseBranchChange,

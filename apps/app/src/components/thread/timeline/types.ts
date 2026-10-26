@@ -63,14 +63,9 @@ export interface ThreadTimelineConsumerMessageAction {
   run(message: ThreadChatMessageReference): void | Promise<void>;
 }
 
-export type ThreadTimelineUnreadDividerPlacement =
-  | {
-      kind: "after-cutoff";
-      cutoffAt: number;
-    }
-  | {
-      kind: "before-first";
-    };
+export interface ThreadTimelineUnreadDividerPlacement {
+  cutoffAt: number;
+}
 
 export type UserAttachmentImageSrcResolver = (
   pathOrUrl: string,
