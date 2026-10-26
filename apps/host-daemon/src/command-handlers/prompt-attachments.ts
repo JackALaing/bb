@@ -16,7 +16,7 @@ import {
   publishFileWithoutReplacing,
   writeVerifiedFile,
   type WrittenFile,
-} from "../verified-file-transfer.js";
+} from "@bb/file-transfer";
 
 type AttachmentPromptInput = Extract<
   PromptInput,
@@ -214,13 +214,14 @@ async function stageAttachment(args: StageAttachmentArgs): Promise<string> {
       });
       written = await writeVerifiedFile({
         destinationPath: downloadPath,
+        durable: false,
         expected: {
           maxBytes: PROMPT_ATTACHMENT_MAX_BYTES,
           sha256: null,
           sizeBytes: expectedSizeBytes ?? null,
         },
         label: `Attachment ${args.attachment.path}`,
-        mode: STAGED_ATTACHMENT_MODE,
+        mode: { kind: "exact", mode: STAGED_ATTACHMENT_MODE },
         source: attachment.content,
       });
     } catch (error) {

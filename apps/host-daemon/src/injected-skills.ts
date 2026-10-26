@@ -24,7 +24,7 @@ import {
   hashFile,
   takeExactBytes,
   writeVerifiedFile,
-} from "./verified-file-transfer.js";
+} from "@bb/file-transfer";
 
 const STAGING_ROOT_SEGMENTS = ["runtime", "global-skills"] as const;
 const STORE_ROOT_SEGMENTS = ["runtime", "skill-store"] as const;
@@ -949,9 +949,10 @@ async function downloadTreeFiles(args: {
           args.contentRootPath,
           ...file.path.split("/"),
         ),
+        durable: false,
         expected: storedFileExpectation(file),
         label: `Skill tree file ${file.path}`,
-        mode: file.mode,
+        mode: { kind: "exact", mode: file.mode },
         source: takeExactBytes(reader, file.sizeBytes),
       });
     }
