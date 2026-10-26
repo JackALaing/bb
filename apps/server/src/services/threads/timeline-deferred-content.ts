@@ -1,5 +1,6 @@
 import type { TimelineRow, TimelineRowStatus } from "@bb/server-contract";
 import { sliceUtf16Head } from "@bb/text-utils";
+import { parseSentThreadMessage } from "@bb/thread-view";
 
 export const TIMELINE_DEFERRED_CONTENT_MIN_CHARS = 1_000;
 
@@ -42,10 +43,13 @@ function deferRowContent(row: TimelineRow): TimelineRow {
         const { outputPreview: _outputPreview, ...rest } = row;
         return {
           ...rest,
-          command: sliceUtf16Head(
-            row.command,
-            TIMELINE_DEFERRED_COMMAND_PREFIX_CHARS,
-          ),
+          command:
+            parseSentThreadMessage(row) === null
+              ? sliceUtf16Head(
+                  row.command,
+                  TIMELINE_DEFERRED_COMMAND_PREFIX_CHARS,
+                )
+              : row.command,
           output: "",
           contentDeferred: true,
         };

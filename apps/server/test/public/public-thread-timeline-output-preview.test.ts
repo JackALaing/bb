@@ -12,6 +12,7 @@ import {
   type ThreadTimelineResponse,
   type TimelineRow,
 } from "@bb/server-contract";
+import { parseSentThreadMessage } from "@bb/thread-view";
 import {
   TIMELINE_INLINE_OUTPUT_PREVIEW_HEAD_CHARS,
   TIMELINE_INLINE_OUTPUT_PREVIEW_TAIL_CHARS,
@@ -1098,6 +1099,104 @@ describe("GET /threads/:id/timeline delegated rows", () => {
           id: deferred.fileRow.id,
         }),
       ]);
+    });
+  });
+
+  it("keeps long sent thread messages recognizable when deferring a completed turn", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, thread } = seedThreadFixture(harness);
+      const turn = {
+        environmentId: environment.id,
+        providerThreadId: "provider-deferred-tell",
+        scope: turnScope("turn-deferred-tell"),
+        threadId: thread.id,
+      } as const;
+      const message = `Status update${"\n- finished a step".repeat(80)}`;
+      const tell = `bb thread tell thr_wrkr234567 --message-file - <<'EOF'\n${message}\nEOF`;
+      const failedTell = tell.replace("thr_wrkr234567", "thr_fail234567");
+      const pipedTell = `cat <<'EOF' | bb thread tell thr_pipe234567 --message-file -\n${message}\nEOF`;
+      expect(tell.length).toBeGreaterThan(1_000);
+      let sequence = 0;
+      const seed = (
+        type: "turn/started" | "item/completed" | "turn/completed",
+        data: object,
+      ) => {
+        sequence += 1;
+        seedEvent(harness.deps, { ...turn, data, sequence, type });
+      };
+      const command = (
+        id: string,
+        commandText: string,
+        exitCode: number,
+        status: "completed" | "failed",
+      ) => ({
+        item: {
+          aggregatedOutput: "Message sent.",
+          approvalStatus: null,
+          command: commandText,
+          cwd: "/tmp",
+          exitCode,
+          id,
+          status,
+          type: "commandExecution",
+        },
+      });
+      seed("turn/started", {});
+      seed("item/completed", command("tell-sent", tell, 0, "completed"));
+      seed("item/completed", command("tell-failed", failedTell, 1, "failed"));
+      seed("item/completed", command("tell-piped", pipedTell, 0, "completed"));
+      seed("item/completed", {
+        item: { id: "assistant-1", text: "Done.", type: "agentMessage" },
+      });
+      seed("turn/completed", { status: "completed" });
+
+      const rows = (await getTimeline(harness, thread.id, "?deferContent=true"))
+        .rows;
+      const sent = rows.find(
+        (row) =>
+          row.kind === "work" &&
+          row.workKind === "command" &&
+          row.callId === "tell-sent",
+      );
+      if (sent?.kind !== "work" || sent.workKind !== "command") {
+        throw new Error("Expected the sent message outside the turn summary");
+      }
+      expect(sent).toMatchObject({
+        command: tell,
+        contentDeferred: true,
+        output: "",
+      });
+      expect(parseSentThreadMessage(sent)).toEqual({
+        message,
+        threadId: "thr_wrkr234567",
+      });
+
+      const turnRow = rows.find((row) => row.kind === "turn");
+      if (turnRow?.kind !== "turn") {
+        throw new Error("Expected the completed turn summary");
+      }
+      const details = timelineTurnSummaryDetailsResponseSchema.parse(
+        await readJson(
+          await harness.app.request(
+            `/api/v1/threads/${thread.id}/timeline/turn-summary-details?turnId=${turnRow.turnId}&sourceSeqStart=${turnRow.sourceSeqStart}&sourceSeqEnd=${turnRow.sourceSeqEnd}&deferContent=true`,
+          ),
+        ),
+      ).rows;
+      const folded = (callId: string) =>
+        details.find(
+          (row) =>
+            row.kind === "work" &&
+            row.workKind === "command" &&
+            row.callId === callId,
+        );
+      expect(folded("tell-failed")).toMatchObject({
+        command: failedTell.slice(0, 300),
+        contentDeferred: true,
+      });
+      expect(folded("tell-piped")).toMatchObject({
+        command: pipedTell.slice(0, 300),
+        contentDeferred: true,
+      });
     });
   });
 
