@@ -3759,3 +3759,33 @@ Docs: `providers.md`.
 
 Before stabilization, decide whether `model/list` `supportedServiceTiers` may
 override the icon and whether reasoning levels should render it.
+
+## Host process toolchain (`@get-bb/plugin-sdk/process`)
+
+`experimental_hostToolchain` supplies `resolve`, `command`, `environment`,
+`node`, `npmCli`, `bundledNpmCli`, an asynchronous `refresh`, and
+`invalidateFailure`. `command` runs what PATH resolves, `npm` included; a
+caller's PATH entries come first, followed by the login-shell PATH and the
+standard tool directories.
+`npmCli` returns a `{ node, cli }` pair: the running Node's own npm, else the
+PATH npm with the Node that owns it, else the bundled npm; self-update uses it.
+`bundledNpmCli` throws where the `npm`
+package cannot be resolved next to the calling bundle. `experimental_spawnHostProcess`,
+`experimental_forkHostProcess`, `experimental_execHostFile`, and
+`experimental_execHostFileCallback` use it to launch processes and never wait for
+discovery. Missing executables and exit 127 start a background refresh; running
+commands are never replayed automatically. These are host-local primitives,
+not remote-machine RPCs.
+
+Core callers use the same process-utils implementation: server and desktop
+launchers, daemon provider installation and terminals, provider workers,
+plugin workers, watcher workers, self-update, and server move. The MCP,
+automations, browser automation, and provider plugins use this SDK path.
+The Plugin Guide's Provider bridges card lists the symbols.
+
+Before stabilization, verify native Windows shims and registry refresh,
+macOS launchd and Electron updates, mise/asdf installations, caller environment
+precedence, bounded discovery failure, and module-ABI preservation after Node
+replacement. Settle the shared process-local instance lifecycle across SDK
+bundle versions and whether `bundledNpmCli` belongs on the public surface before
+removing the prefix.
