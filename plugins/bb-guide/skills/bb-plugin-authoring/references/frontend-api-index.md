@@ -41,6 +41,7 @@ Read the installed SDK declarations for the exact current signatures.
 - `experimental_useQuestionFormHost`
 - `useBbNavigate`
 - `experimental_useCanOpenFileExternally`
+- `experimental_useTabVisible`
 - `experimental_useAppPanel`
 - `experimental_useFixedTabTarget`
 - `useComposer`
@@ -379,6 +380,7 @@ Read the installed SDK declarations for the exact current signatures.
 - `ExperimentalOpenTabOptions`
 - `ExperimentalTabTargetReference`
 - `ExperimentalThreadActionTabProps`
+- `ExperimentalThreadTabProps`
 - `ExperimentalThreadTabActionContext`
 - `ExperimentalPanelController`
 - `BbContext`
