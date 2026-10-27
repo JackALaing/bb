@@ -2240,6 +2240,18 @@ function dialectLaunchEnv(
   };
 }
 
+function additionalSessionDirectories(
+  params: AcpSessionParams,
+  capabilities: AcpAgentCapabilities,
+): { additionalDirectories?: string[] } {
+  const directories = params.workspaceWriteRoots.filter(
+    (root) => root !== params.cwd,
+  );
+  return directories.length > 0 && capabilities.session.additionalDirectories
+    ? { additionalDirectories: directories }
+    : {};
+}
+
 async function startAgentSession(
   request: AcpSessionStartRequest,
 ): Promise<AcpThreadSession> {
@@ -2429,6 +2441,7 @@ async function startAgentSession(
           sessionId: request.sourceProviderThreadId,
           cwd: params.cwd,
           mcpServers,
+          ...additionalSessionDirectories(params, capabilities),
         },
         resultSchema: acpSessionForkResultSchema,
         timeoutMs: ACP_SESSION_SETUP_TIMEOUT_MS,
@@ -2463,6 +2476,7 @@ async function startAgentSession(
             sessionId: request.resumeProviderThreadId,
             cwd: params.cwd,
             mcpServers,
+            ...additionalSessionDirectories(params, capabilities),
           },
           resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
           timeoutMs: ACP_SESSION_SETUP_TIMEOUT_MS,
@@ -2490,7 +2504,11 @@ async function startAgentSession(
       session.pendingLoadUsageUpdate = undefined;
       const newSession = await connection.request({
         method: "session/new",
-        params: { cwd: params.cwd, mcpServers },
+        params: {
+          cwd: params.cwd,
+          mcpServers,
+          ...additionalSessionDirectories(params, capabilities),
+        },
         resultSchema: acpSessionNewResultSchema,
         timeoutMs: ACP_SESSION_SETUP_TIMEOUT_MS,
       });

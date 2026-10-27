@@ -1028,6 +1028,128 @@ describe("acp bridge", () => {
     },
   );
 
+  it("omits additionalDirectories for agents without the capability", async () => {
+    const requestLog = join(workspaceDir, "no-additional-directories.jsonl");
+    await startThread({
+      additionalWorkspaceWriteRoots: ["/tmp/bb-extra-root"],
+      envVars: { FAKE_ACP_REQUEST_LOG: requestLog },
+    });
+
+    const sessionNew = loggedAcpRequests(requestLog).find(
+      (request) => request.method === "session/new",
+    );
+    expect(sessionNew?.params).not.toHaveProperty("additionalDirectories");
+  });
+
+  it.each<{
+    requestMethod: string;
+    sessionMethod: string;
+    capabilityEnv: Record<string, string>;
+    sourceSession: Record<string, string>;
+  }>([
+    {
+      requestMethod: "thread/start",
+      sessionMethod: "session/new",
+      capabilityEnv: {},
+      sourceSession: {},
+    },
+    {
+      requestMethod: "thread/fork",
+      sessionMethod: "session/fork",
+      capabilityEnv: { FAKE_ACP_FORK_SESSION: "1" },
+      sourceSession: { sourceProviderThreadId: "dirs-source-session" },
+    },
+    {
+      requestMethod: "thread/resume",
+      sessionMethod: "session/load",
+      capabilityEnv: { FAKE_ACP_LOAD_SESSION: "1" },
+      sourceSession: { providerThreadId: "dirs-source-session" },
+    },
+    {
+      requestMethod: "thread/resume",
+      sessionMethod: "session/resume",
+      capabilityEnv: { FAKE_ACP_RESUME_SESSION: "1" },
+      sourceSession: { providerThreadId: "dirs-source-session" },
+    },
+  ])(
+    "forwards additional workspace write roots on $sessionMethod when advertised",
+    async ({ requestMethod, sessionMethod, capabilityEnv, sourceSession }) => {
+      const requestLog = join(
+        workspaceDir,
+        `${sessionMethod.replace("/", "-")}-dirs.jsonl`,
+      );
+      const id = sendRequest(requestMethod, {
+        threadId: `dirs-${sessionMethod.replace("/", "-")}`,
+        cwd: workspaceDir,
+        instructionMode: "append",
+        options: executionOptions({
+          providerOptions: {
+            acpLaunchSpec: acpLaunchSpec({
+              envVars: {
+                ...capabilityEnv,
+                FAKE_ACP_ADDITIONAL_DIRECTORIES: "1",
+                FAKE_ACP_REQUEST_LOG: requestLog,
+              },
+            }),
+            additionalWorkspaceWriteRoots: ["/tmp/bb-extra-root"],
+          },
+        }),
+        ...sourceSession,
+      });
+      const response = await waitForResponse(id);
+      expect(response.error).toBeUndefined();
+      const forwarded = loggedAcpRequests(requestLog).find(
+        (request) => request.method === sessionMethod,
+      );
+      expect(forwarded?.params).toMatchObject({
+        cwd: workspaceDir,
+        additionalDirectories: ["/tmp/bb-extra-root"],
+      });
+    },
+  );
+
+  it("forwards updated roots when a later turn changes them", async () => {
+    chmodSync(FAKE_AGENT_PATH, 0o755);
+    const requestLog = join(workspaceDir, "rebuild-directories.jsonl");
+    const launch = {
+      agent: { command: FAKE_AGENT_PATH, args: [] },
+      modelListArgs: ["--list-models"],
+      selectFlag: "--model",
+      envVars: {
+        FAKE_ACP_LOAD_SESSION: "1",
+        FAKE_ACP_MODEL_LINES: "pinme - Pin Me\nother - Other",
+        FAKE_ACP_ADDITIONAL_DIRECTORIES: "1",
+        FAKE_ACP_REQUEST_LOG: requestLog,
+      },
+    };
+    const { providerThreadId } = await startThread({
+      ...launch,
+      model: "pinme",
+      additionalWorkspaceWriteRoots: ["/tmp/bb-extra-root-a"],
+    });
+
+    await completeTurnWith(
+      providerThreadId,
+      "echo-argv",
+      executionOptions({
+        model: "other",
+        providerOptions: {
+          ...launchProviderOptions(launch),
+          additionalWorkspaceWriteRoots: ["/tmp/bb-extra-root-b"],
+        },
+      }),
+    );
+
+    const restores = loggedAcpRequests(requestLog).filter(
+      (request) =>
+        request.method === "session/load" || request.method === "session/new",
+    );
+    expect(restores.length).toBeGreaterThan(1);
+    expect(restores.at(-1)?.params).toMatchObject({
+      additionalDirectories: ["/tmp/bb-extra-root-b"],
+    });
+  });
+
   it.each([
     ["thread/start", "cursor-grok-4.6-medium", "grok-4.6"],
     ["thread/resume", "claude-4.6-sonnet-medium-thinking", "claude-sonnet-4-6"],
