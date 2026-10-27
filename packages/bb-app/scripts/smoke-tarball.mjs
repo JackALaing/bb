@@ -1,5 +1,6 @@
 import { fork, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { createServer as createHttpServer } from "node:http";
 import { mkdirSync, readdirSync } from "node:fs";
 import {
   copyFile,
@@ -424,25 +425,78 @@ function createInstalledBinInvocation(binDir, bin, args) {
 }
 
 async function smokeNpxEntrypoint(tarballPath) {
-  // Keep one real invocation through the package's advertised npx path. Once
-  // npx dispatches the bin, the installed-package smokes below cover the same
-  // launcher without repeatedly charging npm startup to readiness budgets.
-  await timed("npx install and help", () =>
-    runCommand({
-      args: [
-        "--yes",
-        "--no-audit",
-        "--no-fund",
-        "--package",
-        tarballPath,
-        "--",
-        "bb-app",
-        "--help",
-      ],
-      command: "npx",
-      label: "bb-app npx help",
+  const archive = await readFile(tarballPath);
+  const manifest = JSON.parse(
+    await runCommand({
+      command: "tar",
+      args: ["-xOf", basename(tarballPath), "package/package.json"],
+      cwd: dirname(tarballPath),
+      label: "read packed manifest",
     }),
   );
+  if (
+    !isRecord(manifest) ||
+    manifest.name !== "bb-app" ||
+    typeof manifest.version !== "string"
+  ) {
+    throw new Error("Expected a packed bb-app manifest with a version");
+  }
+  const tag = `smoke-${randomUUID()}`;
+  const integrity = `sha512-${createHash("sha512").update(archive).digest("base64")}`;
+  let registryUrl;
+  const server = createHttpServer((request, response) => {
+    if (request.url === "/bb-app.tgz") {
+      response.setHeader("content-type", "application/octet-stream");
+      response.end(archive);
+    } else if (request.url === "/bb-app") {
+      response.setHeader("content-type", "application/json");
+      response.end(
+        JSON.stringify({
+          name: manifest.name,
+          "dist-tags": { [tag]: manifest.version },
+          versions: {
+            [manifest.version]: {
+              ...manifest,
+              dist: { tarball: `${registryUrl}/bb-app.tgz`, integrity },
+            },
+          },
+        }),
+      );
+    } else {
+      response.writeHead(302, {
+        location: `https://registry.npmjs.org${request.url}`,
+      });
+      response.end();
+    }
+  });
+  await new Promise((resolvePromise, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolvePromise);
+  });
+  try {
+    registryUrl = `http://127.0.0.1:${server.address().port}`;
+    await timed("npx install and help", () =>
+      runCommand({
+        args: [
+          "--yes",
+          "--no-audit",
+          "--no-fund",
+          "--package",
+          `bb-app@${tag}`,
+          "--",
+          "bb-app",
+          "--help",
+        ],
+        command: "npx",
+        env: { npm_config_registry: registryUrl },
+        label: "bb-app npx help",
+      }),
+    );
+  } finally {
+    await new Promise((resolvePromise, reject) =>
+      server.close((error) => (error ? reject(error) : resolvePromise())),
+    );
+  }
 }
 
 async function packTarball() {
@@ -888,7 +942,7 @@ async function smokeSdkPackage(tarballPath) {
         "--ignore-scripts=false",
         "--no-audit",
         "--no-fund",
-        tarballPath,
+        `bb-app@file:${tarballPath}`,
       ],
       command: "npm",
       cwd: sdkDir,

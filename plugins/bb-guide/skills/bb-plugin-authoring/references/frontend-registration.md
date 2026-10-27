@@ -73,17 +73,17 @@ export default definePluginApp((app) => {
     id: "issue",
     title: "Open issue",
     component: IssuePanel,
-    run: async ({ threadId, openPanel }) => {
-      openPanel({ title: `Issue for ${threadId}` });
+    run: async ({ threadId, experimental_panel }) => {
+      experimental_panel.openTab({
+        tab: { id: "issue", context: { kind: "thread" }, availability: "action" },
+        title: `Issue for ${threadId}`,
+      });
     },
   });
   app.slots.experimental_newThreadPanelAction({
     id: "template",
     title: "Apply template",
     component: TemplatePanel,
-    run: ({ projectId, openPanel }) => {
-      openPanel({ title: `Template for ${projectId ?? "projectless"}` });
-    },
   });
   app.composer.customize({
     id: "prompt-tools",
@@ -193,8 +193,8 @@ function Automations({ threadId }: ExperimentalThreadInfoProps) {
 ```
 
 Components receive `{ threadId, projectId, environment }` and mount once per
-visible thread; `environment` is `{ id }`, or null when the thread has no
-environment, its host is not active, or it is not a usable checkout. Return
+visible thread; `environment` is `{ id }` taken from the thread, null only when
+the thread has no environment; read its state yourself. Return
 null to show nothing. A row renders `experimental_DetailRow`.
 Entries sort by `group`, then `order` within it (unset last), then registration
 order, bb's first on a tie, as thread actions do. Join one of bb's groups from
@@ -475,6 +475,7 @@ the sidebar.
 `experimental_ThreadActionsContextMenu` around your row for bb's own thread
 menu (archive and delete confirmation included) plus every plugin's thread
 actions; see "An action in every thread menu".
+For multi-row selections (`experimental_bulkItem`), see frontend-sidebar-navigation.md.
 `experimental_useArchiveEnvironmentThreads()` archives a whole environment
 group with bb's pane cleanup and Undo toast.
 
