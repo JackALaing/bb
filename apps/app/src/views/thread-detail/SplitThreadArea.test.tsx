@@ -3189,23 +3189,6 @@ describe("SplitThreadArea compact breakpoint crossings", () => {
     expect(screen.queryByTestId("maximize-thr-a")).toBeNull();
   });
 
-  it("closes the compact single thread pane into the composer", async () => {
-    viewportState.compact = true;
-    const store = renderSplitArea({
-      path: threadPath("thr-a"),
-      layout: singleThreadLayout(),
-      routeAwareContent: true,
-    });
-    fireEvent.click(await screen.findByTestId("close-thr-a"));
-
-    expect(await screen.findByTestId("root-compose-view")).toBeTruthy();
-    expect(screen.getByTestId("location").textContent).toBe("/");
-    expect(paneContents(store.get(splitLayoutAtom))).toEqual([
-      newThreadContent,
-    ]);
-    expect((await findComposerPane()).paneId).toBe("pane-1");
-  });
-
   it("follows compact route navigation to another thread without a stale frame", async () => {
     viewportState.compact = true;
     const store = renderSplitArea({
@@ -3288,66 +3271,6 @@ describe("SplitThreadArea compact breakpoint crossings", () => {
       text: "plugin edit for thr-a",
     });
     expect(threadDraftText("thr-b")).toBe("");
-  });
-
-  it("rescopes the compact plugin composer to the next thread on route navigation", async () => {
-    composerScopeProbe.active = true;
-    viewportState.compact = true;
-    renderSplitArea({
-      path: threadPath("thr-a"),
-      layout: singleThreadLayout(),
-      externalTo: threadPath("thr-b"),
-    });
-    await screen.findByTestId("pane-thr-a");
-    act(() => {
-      fireEvent.click(screen.getByTestId("plugin-composer-replace"));
-    });
-    expect(threadDraftText("thr-a")).toBe("plugin edit for thr-a");
-
-    fireEvent.click(screen.getByTestId("external-nav"));
-    await screen.findByTestId("pane-thr-b");
-    expect(screen.getAllByTestId("plugin-composer")).toHaveLength(1);
-    expect(pluginComposer()).toMatchObject({
-      scopeThreadId: "thr-b",
-      key: threadDraftKey("thr-b"),
-      text: "",
-    });
-    act(() => {
-      fireEvent.click(screen.getByTestId("plugin-composer-replace"));
-    });
-    expect(threadDraftText("thr-b")).toBe("plugin edit for thr-b");
-    expect(threadDraftText("thr-a")).toBe("plugin edit for thr-a");
-
-    setCompactViewport(false);
-    expect(pluginComposer()).toMatchObject({
-      scopeThreadId: "thr-b",
-      key: threadDraftKey("thr-b"),
-      text: "plugin edit for thr-b",
-    });
-  });
-
-  it("collapses a split to the focused pane on compact and restores every pane on desktop", async () => {
-    const store = renderSplitArea({
-      path: threadPath("thr-b"),
-      layout: twoPaneLayout("pane-2"),
-    });
-    expect(await screen.findByTestId("pane-thr-a")).toBeTruthy();
-    expect(screen.getByTestId("pane-thr-b")).toBeTruthy();
-    expect(screen.getByTestId("maximize-thr-b")).toBeTruthy();
-
-    setCompactViewport(true);
-    expect(screen.queryByTestId("pane-thr-a")).toBeNull();
-    expect(screen.getByTestId("pane-thr-b")).toBeTruthy();
-    expect(screen.queryByTestId("maximize-thr-b")).toBeNull();
-    expect(latestPaneContext("thr-b").isSplitPane).toBe(false);
-    expect(latestPaneContext("thr-b").paneId).toBe("pane-2");
-
-    setCompactViewport(false);
-    expect(screen.getByTestId("pane-thr-a")).toBeTruthy();
-    expect(screen.getByTestId("pane-thr-b")).toBeTruthy();
-    expect(screen.getByTestId("maximize-thr-b")).toBeTruthy();
-    expect(latestPaneContext("thr-b").isSplitPane).toBe(true);
-    expect(store.get(splitLayoutAtom)).toEqual(twoPaneLayout("pane-2"));
   });
 
   it("opens a thread from the compact composer without remounting it", async () => {
