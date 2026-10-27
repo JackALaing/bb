@@ -685,7 +685,8 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
   const singlePane =
     panes.length === 1 && firstPane !== undefined ? firstPane : null;
   const keepsSinglePane =
-    singlePane !== null && currentContent.kind === "thread";
+    singlePane !== null &&
+    (currentContent.kind === "thread" || currentContent.kind === "new-thread");
   if (!splitWorkspaceActive && !keepsSinglePane) {
     return (
       <StandalonePaneContent
@@ -1150,6 +1151,7 @@ function StandalonePaneContent({
   if (content.kind === "thread" || content.kind === "new-thread") {
     return (
       <DefaultPaneContextProvider
+        paneId={paneId}
         onRequestClose={onRequestClose}
         navigateInPane={navigateInPane}
       >

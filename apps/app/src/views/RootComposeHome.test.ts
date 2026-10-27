@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCompactHomeLeadingSpace } from "./RootComposeCompactHome";
+import { getCompactHomeLeadingSpace } from "./RootComposeHome";
 import {
   MOBILE_RECENT_LABEL_HEIGHT_PX,
   MOBILE_RECENT_ROW_HEIGHT_PX,

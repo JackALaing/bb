@@ -203,7 +203,14 @@ function RootComposeFixture() {
     pane?.secondaryPanelHost ?? null,
     panelModel,
   );
-  return <div data-testid="root-compose-view" />;
+  useEffect(() => {
+    paneMounts.set("new-thread", (paneMounts.get("new-thread") ?? 0) + 1);
+  }, []);
+  return (
+    <div data-testid="root-compose-view">
+      <textarea data-testid="draft-new-thread" />
+    </div>
+  );
 }
 
 vi.mock("@bb/shared-ui/hooks/use-compact-viewport", async () => {
@@ -3196,7 +3203,7 @@ describe("SplitThreadArea compact breakpoint crossings", () => {
     expect(paneContents(store.get(splitLayoutAtom))).toEqual([
       newThreadContent,
     ]);
-    expect((await findComposerPane()).paneId).toBe("main");
+    expect((await findComposerPane()).paneId).toBe("pane-1");
   });
 
   it("follows compact route navigation to another thread without a stale frame", async () => {
@@ -3333,6 +3340,7 @@ describe("SplitThreadArea compact breakpoint crossings", () => {
     expect(screen.getByTestId("pane-thr-b")).toBeTruthy();
     expect(screen.queryByTestId("maximize-thr-b")).toBeNull();
     expect(latestPaneContext("thr-b").isSplitPane).toBe(false);
+    expect(latestPaneContext("thr-b").paneId).toBe("pane-2");
 
     setCompactViewport(false);
     expect(screen.getByTestId("pane-thr-a")).toBeTruthy();
@@ -3367,11 +3375,24 @@ describe("SplitThreadArea compact breakpoint crossings", () => {
     expect(latestPaneContext("thr-a").onRequestClose).not.toBeNull();
   });
 
-  it("keeps a compact new-thread composer on the standalone pane context", async () => {
-    viewportState.compact = true;
+  it("keeps one new-thread composer mounted with focus and selection across crossings", async () => {
     renderSplitArea({ path: "/", routeContent: newThreadContent });
-    const pane = await findComposerPane();
-    expect(pane.paneId).toBe("main");
-    expect(pane.onRequestClose).toBeNull();
+    const composer = await screen.findByTestId("root-compose-view");
+    const textarea =
+      screen.getByTestId<HTMLTextAreaElement>("draft-new-thread");
+    fireEvent.change(textarea, { target: { value: "new thread draft" } });
+    textarea.focus();
+    textarea.setSelectionRange(4, 10);
+
+    for (const compact of [true, false, true, false]) {
+      setCompactViewport(compact);
+      expect(screen.getByTestId("root-compose-view")).toBe(composer);
+      expect(document.activeElement).toBe(textarea);
+      expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([4, 10]);
+      const pane = await findComposerPane();
+      expect(pane.paneId).toBe("pane-1");
+      expect(pane.onRequestClose).toBeNull();
+    }
+    expect(paneMounts.get("new-thread")).toBe(1);
   });
 });

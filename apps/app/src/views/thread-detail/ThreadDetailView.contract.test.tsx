@@ -141,6 +141,7 @@ describePanelControllerContract(
           path: "/",
           element: (
             <DefaultPaneContextProvider
+              paneId="main"
               onRequestClose={null}
               navigateInPane={() => {}}
             >

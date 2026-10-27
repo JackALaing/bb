@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useContext, useLayoutEffect, useRef } from "react";
-import { RootComposeCompactHome } from "./RootComposeCompactHome";
+import { RootComposeHome } from "./RootComposeHome";
 import { ComposerMaxHeightContext } from "@/components/promptbox/composer-max-height";
 import { registerPaneComposerFocus } from "@/lib/pane-composer-focus";
 
@@ -30,13 +30,16 @@ function ComposerRootProbe() {
 
 function renderCompactHome() {
   return render(
-    <RootComposeCompactHome composer={<div data-testid="composer" />}>
-      <div data-testid="recents" />
-    </RootComposeCompactHome>,
+    <RootComposeHome
+      isCompact
+      composer={<div data-testid="composer" />}
+      compactScrollContent={<div data-testid="recents" />}
+      homepageSections={null}
+    />,
   );
 }
 
-describe("RootComposeCompactHome", () => {
+describe("RootComposeHome", () => {
   it("keeps the composer above a scroll viewport that runs behind it", () => {
     renderCompactHome();
 
@@ -88,9 +91,12 @@ describe("RootComposeCompactHome", () => {
     );
 
     render(
-      <RootComposeCompactHome composer={<ComposerRootProbe />}>
-        <div />
-      </RootComposeCompactHome>,
+      <RootComposeHome
+        isCompact
+        composer={<ComposerRootProbe />}
+        compactScrollContent={<div />}
+        homepageSections={null}
+      />,
     );
 
     expect(screen.getByTestId("composer-root").dataset.maxHeight).toBe(
