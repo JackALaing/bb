@@ -131,18 +131,20 @@ export function useOptionalPaneContext(): PaneContextValue | null {
 
 interface DefaultPaneContextProviderProps {
   children: ReactNode;
+  paneId: string;
   onRequestClose: (() => void) | null;
   navigateInPane: (thread: ThreadRoutePathArgs) => void;
 }
 
 export function DefaultPaneContextProvider({
   children,
+  paneId,
   onRequestClose,
   navigateInPane,
 }: DefaultPaneContextProviderProps) {
   const value = useMemo<PaneContextValue>(
     () => ({
-      paneId: "main",
+      paneId,
       isFocused: true,
       isSplitPane: false,
       secondaryPanelHost: null,
@@ -155,7 +157,7 @@ export function DefaultPaneContextProvider({
       ownsWindowTopLeft: true,
       navigateInPane,
     }),
-    [navigateInPane, onRequestClose],
+    [navigateInPane, onRequestClose, paneId],
   );
 
   return <PaneContext.Provider value={value}>{children}</PaneContext.Provider>;

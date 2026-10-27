@@ -11,10 +11,7 @@
       },
       {
         "path": "apps/app/src/views/RootComposeSecondaryContent.tsx",
-        "anchors": [
-          "RootComposeCompactHome composer={children}",
-          "PluginHomepageSections"
-        ]
+        "anchors": ["isCompact={isCompactHomeLayout}", "PluginHomepageSections"]
       },
       {
         "path": "apps/app/src/components/secondary-panel/CompactSecondaryPanelShelf.tsx",

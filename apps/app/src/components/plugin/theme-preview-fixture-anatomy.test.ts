@@ -186,7 +186,7 @@ const VIEW_FIXTURE_ANCHORS: Record<string, readonly FixtureAnchor[]> = {
         "The New thread projection opens on the composer alone, aligned under the sidebar actions.",
     },
     {
-      file: "apps/app/src/views/RootComposeSecondaryContent.tsx",
+      file: "apps/app/src/views/RootComposeHome.tsx",
       mustContain: ['ROOT_COMPOSE_MAX_WIDTH_CLASS = "max-w-[760px]"'],
       because: "The New thread projection keeps BB's home column width.",
     },
