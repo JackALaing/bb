@@ -1,3 +1,4 @@
+import { ApplicationLinkApprovalsSettings } from "@/components/settings/ApplicationLinkApprovalsSettings";
 import { MobileAppSection } from "@/components/settings/MobileAppSection";
 import { MachineEnvironmentSettings } from "@/components/settings/MachineEnvironmentSettings";
 import { MachineAccessSettings } from "@/components/settings/MachineAccessSettings";
@@ -1018,41 +1019,40 @@ export function GeneralSettingsSection({
           </SettingsWithControl>
         </div>
       </SettingsSection>
-      {desktopBrowserAvailable || localhostRewriteDescription !== null ? (
-        <SettingsSection title="Links">
-          <div className="space-y-5">
-            {desktopBrowserAvailable ? (
-              <SettingsWithControl
-                label={IN_APP_BROWSER_LINK_SETTING_LABEL}
-                description="Open web links inside bb."
-              >
-                <Switch
-                  checked={openLinksInAppBrowser}
-                  onCheckedChange={onOpenLinksInAppBrowserChange}
-                  aria-label={IN_APP_BROWSER_LINK_SETTING_LABEL}
-                />
-              </SettingsWithControl>
-            ) : null}
+      <SettingsSection title="Links">
+        <div className="space-y-5">
+          {desktopBrowserAvailable ? (
+            <SettingsWithControl
+              label={IN_APP_BROWSER_LINK_SETTING_LABEL}
+              description="Open web links inside bb."
+            >
+              <Switch
+                checked={openLinksInAppBrowser}
+                onCheckedChange={onOpenLinksInAppBrowserChange}
+                aria-label={IN_APP_BROWSER_LINK_SETTING_LABEL}
+              />
+            </SettingsWithControl>
+          ) : null}
 
-            {localhostRewriteDescription !== null ? (
-              <SettingsWithControl
-                label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
-                description={
-                  <span className="break-words [overflow-wrap:anywhere]">
-                    {localhostRewriteDescription}
-                  </span>
-                }
-              >
-                <Switch
-                  checked={rewriteLocalhostLinks}
-                  onCheckedChange={onRewriteLocalhostLinksChange}
-                  aria-label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
-                />
-              </SettingsWithControl>
-            ) : null}
-          </div>
-        </SettingsSection>
-      ) : null}
+          {localhostRewriteDescription !== null ? (
+            <SettingsWithControl
+              label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
+              description={
+                <span className="break-words [overflow-wrap:anywhere]">
+                  {localhostRewriteDescription}
+                </span>
+              }
+            >
+              <Switch
+                checked={rewriteLocalhostLinks}
+                onCheckedChange={onRewriteLocalhostLinksChange}
+                aria-label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
+              />
+            </SettingsWithControl>
+          ) : null}
+          <ApplicationLinkApprovalsSettings />
+        </div>
+      </SettingsSection>
       <SettingsSection title="Terminals">
         <SettingsWithControl
           label="Copy on select"
@@ -1135,6 +1135,11 @@ const EXPERIMENT_DEFINITIONS: Record<
   ExperimentKey,
   { label: string; description: string }
 > = {
+  applicationLinks: {
+    label: "App links",
+    description:
+      "Open links like linear:// or slack:// in their apps on this device. BB asks first unless you choose Always allow. Manage approvals in General → Links → App links.",
+  },
   changelogPreview: {
     label: "Changelog preview",
     description:

@@ -14,6 +14,21 @@ question.
 [provider-bridge-protocol.md](provider-bridge-protocol.md). An entry without
 a "Docs:" line has no owning doc, so it keeps the essential contract itself.
 
+## Application link approvals (`@get-bb/plugin-sdk/app`)
+
+`experimental_getApplicationLinkApprovals()` lists approved URL schemes on the
+viewing client. `experimental_revokeApplicationLinkApproval(scheme)` removes one;
+`null` resets all. Both return the remaining scheme list. They use the same
+`applicationLinkApprovals` implementation as core Settings → General → Links →
+Application link approvals. All clients use web localStorage scoped to the
+current origin and device profile. Neither API can grant approvals. The shared
+web UI owns consent; native clients validate and launch the approved URL.
+
+Docs: Plugin Guide, Host components (`plugins/plugin-api-docs/src/surfaces.ts`).
+Before stabilization, verify consent and revoke flows on all supported native
+platforms, per-origin scope, old-client launch errors, and storage recovery. Core
+callers are `ApplicationLinkApprovalsSettings` and the URL confirmation dispatcher.
+
 ## Composer popups
 
 `ComposerCustomization.experimental_popups` registers `{ id, label, component }`
@@ -1451,7 +1466,7 @@ Docs: `backend-foundation.md`, `testing.md`.
     `experimental_declaredIconNames` options, the `experimental_hostRpcCalls`
     inspection list, the `experimental_emitHostWorkerExit` and
     `experimental_emitHostSignal` drivers, and `experimental_watchRpc(method,
-    read)`, which runs a method's `experimental_whileWatched` producer as a
+read)`, which runs a method's `experimental_whileWatched` producer as a
     client watch would and returns the unwatch function; plugin disposal aborts
     the watches still running, as the real host does. The Git plugin's server
     tests use it to check that ended turns cost nothing while no environment is

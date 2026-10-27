@@ -4879,8 +4879,10 @@ export interface BbNavigate {
     hostId?: string;
   }): void;
   /**
-   * Open an HTTP(S) URL using this client's BB browser preference. Returns
-   * false for schemes the host does not own. Experimental: see
+   * Open an HTTP(S) URL using this client's BB browser preference, or request
+   * an application link on this device with confirmation unless its scheme is approved when
+   * the applicationLinks experiment is enabled. Returns false
+   * for blocked or unsupported schemes. True means handled, not launched. See
    * docs/api_to_audit.md.
    */
   openUrl(url: string): boolean;
@@ -5030,6 +5032,12 @@ export interface ExperimentalRpcMutationState<
  * shims the specifier to that object on `globalThis.__bbPluginRuntime`.
  */
 export interface PluginSdkApp {
+  /** List URL schemes approved for this BB site in the viewing client's localStorage. Core Settings uses the same implementation. */
+  experimental_getApplicationLinkApprovals(): Promise<string[]>;
+  /** Revoke one scheme, or all with null, for this BB site on this client. Does not grant permission. */
+  experimental_revokeApplicationLinkApproval(
+    scheme: string | null,
+  ): Promise<string[]>;
   experimental_PluginRpcCallError: typeof experimental_PluginRpcCallError;
   experimental_useRpcRefresh(): { refresh(): void; isRefreshing: boolean };
   /** Read tagged plugin data through BB's shared query cache and realtime lifecycle. */

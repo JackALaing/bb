@@ -852,11 +852,15 @@ bb stores only the experiments you set; the others follow the shipped default.
 The `earlyAdopter` general setting (the Become an early adopter banner on
 Settings → Experiments, `bb settings general earlyAdopter on`) switches the
 shipped default to the early adopter default: experiments marked Early adopter
-(currently `timelinePush`, `compactExpiredCache`, and `sidebarMultiSelect`) turn on, and the rest stay
+(currently `applicationLinks`, `timelinePush`, `compactExpiredCache`, and `sidebarMultiSelect`) turn on, and the rest stay
 off. An experiment you set yourself keeps your value either way.
 `/system/config` and `sdk.system.config()` return the resolved values in
 `experiments`.
 
+- `applicationLinks` (on for early adopters) enables explicit app links such as
+  `linear://` and `slack://` in rendered Markdown and the plugin
+  `navigate.openUrl` path. The viewing device asks before opening unless the
+  scheme was saved with Always allow. See [App links](#app-links).
 - `changelogPreview` shows the latest release notes as a dismissible card on
   Settings → Updates.
 - `compactExpiredCache` (on for early adopters) reports `compactionOfferAt` on a thread's context
@@ -1346,3 +1350,29 @@ metadata is preserved. This is a desktop-local preference, with no server
 settings CLI/SDK endpoint. Builds with tolerant readers ignore the field and
 may drop it on save; older strict readers can reject the whole file, so keep a
 backup before rolling back to a build predating the tolerant-reader fix #5286.
+
+## App links
+
+Enable App links in Settings → Experiments or run
+`bb settings experiment applicationLinks true`. The experiment is a server
+setting shared by its clients. Disable it with
+`bb settings experiment applicationLinks false`.
+
+Explicit Markdown links such as `[Review note](reflect://note/Project%20X)`
+become clickable while enabled. Bare custom-scheme text is not auto-linked.
+The shared web UI asks before opening an app on the viewing device; choose
+Always allow to remember that URL scheme. All clients save approvals in
+localStorage for this BB site on this device. They do not sync between devices,
+browsers, app profiles, or server addresses. Settings → General → Links → App links lists
+saved schemes; the trash button next to a scheme revokes it.
+The Plugin SDK can list and revoke through the same implementation; it cannot
+grant approval. There is no server-side or local-desktop-profile approval store.
+
+Desktop and mobile validate the URL again and hand it to the OS after the web
+UI approves it. Native code does not show a second confirmation or store
+permissions. Failed native launches do not save new approvals. Resetting
+approvals invalidates pending remember choices. Old native clients show an
+update message. Web browsers control their own handoff and may show a second
+prompt; BB cannot reliably detect missing apps in a browser. Executable web
+schemes, local-file launch schemes, and reserved editor-action schemes remain
+blocked.
