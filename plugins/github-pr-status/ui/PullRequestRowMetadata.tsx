@@ -85,16 +85,14 @@ export function PullRequestBadge({
       role="img"
       aria-label={label}
       data-pull-request-badge={pullRequest.state}
-      className={cn(
-        "flex shrink-0 items-center gap-1 text-xs leading-4 tabular-nums",
-        state.className,
-      )}
+      className="flex shrink-0 items-center gap-1 text-xs leading-3.5 tabular-nums"
       onPointerEnter={hovered ? undefined : () => setHovered(true)}
     >
-      <Icon name={state.icon} className="size-3 shrink-0" />
-      <span className="font-mono text-muted-foreground">
-        #{pullRequest.number}
-      </span>
+      <Icon
+        name={state.icon}
+        className={cn("size-3.5 shrink-0", state.className)}
+      />
+      <span className="text-subtle-foreground">#{pullRequest.number}</span>
       {glyph === null ? null : <AttentionGlyph kind={glyph} />}
     </span>
   );

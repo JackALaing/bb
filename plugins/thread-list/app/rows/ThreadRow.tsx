@@ -632,36 +632,6 @@ function ThreadRowComponent({
     rename.onCloseAutoFocus(event);
   };
 
-  const providerIcon = provider ? (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          data-sidebar-thread-provider={provider.id}
-          role="img"
-          aria-label={provider.displayName}
-          className={cn(
-            "pointer-events-auto z-[31] flex size-4 shrink-0 items-center justify-center text-muted-foreground",
-            showRowMetadata
-              ? "absolute left-0 top-1/2 -translate-y-1/2"
-              : "relative mr-2",
-          )}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            rowLinkRef.current?.click();
-          }}
-        >
-          <ProviderIcon
-            providerKind="agent"
-            provider={provider}
-            className="size-3.5"
-          />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top">{provider.displayName}</TooltipContent>
-    </Tooltip>
-  ) : null;
-
   const rowContent = (
     <>
       {parentOptions?.stickyLevel !== undefined && parentGuideLeft !== null ? (
@@ -674,8 +644,8 @@ function ThreadRowComponent({
       <span
         className={cn(
           "relative flex min-w-0 flex-1 items-center gap-1.5 self-stretch",
-          showRowMetadata && "flex-wrap content-center gap-y-0 py-1",
-          showRowMetadata && provider !== undefined && "pl-6",
+          showRowMetadata &&
+            "flex-wrap content-center gap-y-0 py-1 has-[[data-thread-row-metadata][data-has-items]]:py-1.25 has-[[data-thread-row-metadata][data-has-items]]:[&_.bb-thread-title]:leading-4",
           !isActionsOpen &&
             "group-data-[sidebar-touch-armed=true]/thread-row:hidden",
           !shortcut &&
@@ -687,7 +657,6 @@ function ThreadRowComponent({
         )}
         style={getHoverActionsInsetStyle(quickActions.length)}
       >
-        {showRowMetadata ? providerIcon : null}
         <a
           ref={rowLinkRef}
           href={thread.href}
@@ -729,64 +698,103 @@ function ThreadRowComponent({
           className="absolute inset-0 rounded-md outline-none"
         />
         <span
-          className={cn(
-            "pointer-events-none relative flex min-w-0 items-center self-stretch",
-            ((crossProjectLabel === null && (!parentOptions || !hasChildren)) ||
-              isEditing) &&
-              "flex-1",
-          )}
+          className={
+            showRowMetadata
+              ? "flex min-w-0 basis-full items-center gap-1.5 self-stretch"
+              : "contents"
+          }
         >
-          {showRowMetadata ? null : providerIcon}
-          {isEditing ? (
-            <span className="pointer-events-auto relative z-10 min-w-0 flex-1 overflow-visible">
-              {editor}
-            </span>
-          ) : (
-            <span
-              className={cn(
-                "bb-thread-title",
-                crossProjectLabel !== null && "min-w-0 truncate",
-              )}
-              title={labelTitle}
-              onDoubleClick={startTitleEditing}
-            >
-              <ThreadTitle threadId={thread.id} />
-            </span>
-          )}
-        </span>
-        {crossProjectLabel !== null ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                data-sidebar-thread-cross-project=""
-                role="img"
-                aria-label={crossProjectLabel}
-                className="relative z-[31] flex size-5 shrink-0 items-center justify-center text-muted-foreground"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  rowLinkRef.current?.click();
-                }}
-              >
-                <Icon name="FolderExport" className="size-3.5" aria-hidden />
+          <span
+            className={cn(
+              "pointer-events-none relative flex min-w-0 items-center self-stretch",
+              ((crossProjectLabel === null &&
+                (!parentOptions || !hasChildren)) ||
+                isEditing) &&
+                "flex-1",
+            )}
+          >
+            {provider ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    data-sidebar-thread-provider={provider.id}
+                    role="img"
+                    aria-label={provider.displayName}
+                    className="pointer-events-auto relative z-[31] flex size-4 shrink-0 items-center justify-center mr-2 text-muted-foreground"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      rowLinkRef.current?.click();
+                    }}
+                  >
+                    <ProviderIcon
+                      providerKind="agent"
+                      provider={provider}
+                      className="size-3.5"
+                    />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {provider.displayName}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            {isEditing ? (
+              <span className="pointer-events-auto relative z-10 min-w-0 flex-1 overflow-visible">
+                {editor}
               </span>
-            </TooltipTrigger>
-            <TooltipContent side="top">{crossProjectLabel}</TooltipContent>
-          </Tooltip>
-        ) : null}
-        {parentOptions && hasChildren ? (
-          <SidebarChildToggleChevron
-            disabled={isEditing}
-            className={isEditing ? "hidden" : undefined}
-            isCollapsed={isParentCollapsed}
-            expandLabel={`Expand ${labelTitle} threads`}
-            collapseLabel={`Collapse ${labelTitle} threads`}
-            onToggle={() => parentOptions.onToggleCollapsed(thread.id)}
-            revealOnHover={!isParentCollapsed}
-          />
-        ) : null}
+            ) : (
+              <span
+                className={cn(
+                  "bb-thread-title",
+                  crossProjectLabel !== null && "min-w-0 truncate",
+                )}
+                title={labelTitle}
+                onDoubleClick={startTitleEditing}
+              >
+                <ThreadTitle threadId={thread.id} />
+              </span>
+            )}
+          </span>
+          {crossProjectLabel !== null ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  data-sidebar-thread-cross-project=""
+                  role="img"
+                  aria-label={crossProjectLabel}
+                  className="relative z-[31] flex size-5 shrink-0 items-center justify-center text-muted-foreground"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    rowLinkRef.current?.click();
+                  }}
+                >
+                  <Icon name="FolderExport" className="size-3.5" aria-hidden />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">{crossProjectLabel}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          {parentOptions && hasChildren ? (
+            <SidebarChildToggleChevron
+              disabled={isEditing}
+              className={isEditing ? "hidden" : undefined}
+              isCollapsed={isParentCollapsed}
+              expandLabel={`Expand ${labelTitle} threads`}
+              collapseLabel={`Collapse ${labelTitle} threads`}
+              onToggle={() => parentOptions.onToggleCollapsed(thread.id)}
+              revealOnHover={!isParentCollapsed}
+            />
+          ) : null}
+        </span>
         {!showRowMetadata || isEditing || isCustomizingActions ? null : (
-          <span className="flex min-w-0 basis-full">
+          <span
+            className={cn(
+              "mt-px flex min-w-0 basis-full",
+              provider !== undefined && "pl-6",
+            )}
+          >
             <ThreadRowMetadata thread={thread} />
           </span>
         )}
