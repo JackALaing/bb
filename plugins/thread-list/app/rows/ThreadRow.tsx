@@ -41,7 +41,9 @@ import {
   experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
   experimental_ThreadActionsMenu as ThreadActionsMenu,
   experimental_ThreadStatusGlyph as ThreadStatusGlyph,
+  experimental_ThreadRowMetadata as ThreadRowMetadata,
   experimental_THREAD_ACTION_GROUPS,
+  experimental_useExperiment,
   experimental_useThreadActions,
   experimental_useSidebarThreadSplit,
   experimental_ProviderIcon as ProviderIcon,
@@ -66,6 +68,8 @@ import {
 import { useSidebarProjectName } from "../model/use-sidebar-data.js";
 import {
   sidebarShowProviderIconsAtom,
+  sidebarShowRowMetadataAtom,
+  THREAD_ROW_METADATA_EXPERIMENT,
   threadRowActionsAtom,
 } from "../preferences/atoms.js";
 import { ShortcutPill } from "@/components/ui/shortcut-pill";
@@ -391,6 +395,11 @@ function ThreadRowComponent({
   const multiSelection = useMultiSelectionContaining(thread.id);
   const selectionMenu = useThreadSelectionMenu(multiSelection);
   const showProviderIcons = useAtomValue(sidebarShowProviderIconsAtom);
+  const rowMetadataEnabled = experimental_useExperiment(
+    THREAD_ROW_METADATA_EXPERIMENT,
+  );
+  const showRowMetadata =
+    useAtomValue(sidebarShowRowMetadataAtom) && rowMetadataEnabled;
   const providers = useContext(SidebarProvidersContext);
   const provider = showProviderIcons
     ? providers.find((candidate) => candidate.id === thread.providerId)
@@ -558,6 +567,8 @@ function ThreadRowComponent({
     options.isCompact
       ? COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS
       : COARSE_POINTER_ROW_HEIGHT_CLASS,
+    showRowMetadata &&
+      "h-auto min-h-[var(--bb-sidebar-row-height)] max-md:pointer-coarse:h-auto max-md:pointer-coarse:min-h-[var(--bb-sidebar-row-height-coarse)]",
     showActive
       ? SIDEBAR_ROW_SELECTED_STATE_CLASS
       : SIDEBAR_ROW_INTERACTIVE_STATE_CLASS,
@@ -595,7 +606,12 @@ function ThreadRowComponent({
     (event) => {
       if (event.target !== event.currentTarget) {
         if (!(event.target instanceof Element)) return;
-        if (!event.target.closest("[data-sidebar-thread-trailing]")) return;
+        if (
+          !event.target.closest(
+            "[data-sidebar-thread-trailing], [data-thread-row-metadata]",
+          )
+        )
+          return;
         if (event.target.closest("a, button")) return;
       }
       if (selectionStore.handleClick(thread.id, event, event.currentTarget)) {
@@ -616,6 +632,36 @@ function ThreadRowComponent({
     rename.onCloseAutoFocus(event);
   };
 
+  const providerIcon = provider ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-sidebar-thread-provider={provider.id}
+          role="img"
+          aria-label={provider.displayName}
+          className={cn(
+            "pointer-events-auto z-[31] flex size-4 shrink-0 items-center justify-center text-muted-foreground",
+            showRowMetadata
+              ? "absolute left-0 top-1/2 -translate-y-1/2"
+              : "relative mr-2",
+          )}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            rowLinkRef.current?.click();
+          }}
+        >
+          <ProviderIcon
+            providerKind="agent"
+            provider={provider}
+            className="size-3.5"
+          />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">{provider.displayName}</TooltipContent>
+    </Tooltip>
+  ) : null;
+
   const rowContent = (
     <>
       {parentOptions?.stickyLevel !== undefined && parentGuideLeft !== null ? (
@@ -628,6 +674,8 @@ function ThreadRowComponent({
       <span
         className={cn(
           "relative flex min-w-0 flex-1 items-center gap-1.5 self-stretch",
+          showRowMetadata && "flex-wrap content-center gap-y-0 py-1",
+          showRowMetadata && provider !== undefined && "pl-6",
           !isActionsOpen &&
             "group-data-[sidebar-touch-armed=true]/thread-row:hidden",
           !shortcut &&
@@ -639,6 +687,7 @@ function ThreadRowComponent({
         )}
         style={getHoverActionsInsetStyle(quickActions.length)}
       >
+        {showRowMetadata ? providerIcon : null}
         <a
           ref={rowLinkRef}
           href={thread.href}
@@ -687,30 +736,7 @@ function ThreadRowComponent({
               "flex-1",
           )}
         >
-          {provider ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  data-sidebar-thread-provider={provider.id}
-                  role="img"
-                  aria-label={provider.displayName}
-                  className="pointer-events-auto relative z-[31] flex size-4 shrink-0 items-center justify-center mr-2 text-muted-foreground"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    rowLinkRef.current?.click();
-                  }}
-                >
-                  <ProviderIcon
-                    providerKind="agent"
-                    provider={provider}
-                    className="size-3.5"
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top">{provider.displayName}</TooltipContent>
-            </Tooltip>
-          ) : null}
+          {showRowMetadata ? null : providerIcon}
           {isEditing ? (
             <span className="pointer-events-auto relative z-10 min-w-0 flex-1 overflow-visible">
               {editor}
@@ -759,6 +785,11 @@ function ThreadRowComponent({
             revealOnHover={!isParentCollapsed}
           />
         ) : null}
+        {!showRowMetadata || isEditing || isCustomizingActions ? null : (
+          <span className="flex min-w-0 basis-full">
+            <ThreadRowMetadata thread={thread} />
+          </span>
+        )}
       </span>
       {rowDragBindings && !rowDragBindings.disabled && !isActionsOpen ? (
         <SidebarThreadDragChip

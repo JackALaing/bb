@@ -1707,6 +1707,67 @@ export interface PluginSidebarThreadActions {
 }
 
 /**
+ * Props passed to an `experimental_threadRowMetadata` component, rendered on a
+ * thread's row in a thread list: bb's sidebar and any list that draws
+ * {@link PluginSdkApp.experimental_ThreadRowMetadata}.
+ */
+export interface ExperimentalThreadRowMetadataProps<Data = undefined> {
+  /** The row's thread, the same value the list renders. */
+  thread: PluginSidebarThread;
+  /** What `useData` last returned; undefined when the registration has none. */
+  data: Data;
+}
+
+/** What a row metadata registration's `useData` receives. */
+export interface ExperimentalThreadRowMetadataDataInput {
+  /**
+   * Every thread a list may draw a metadata line for: bb's active sidebar
+   * threads in sidebar order, then any other thread whose line is mounted
+   * (such as an archived row), deduplicated. Threads whose rows are not
+   * rendered, like a windowed list's rows off screen, are included: load
+   * them all in one batch so a row has its data, and its final height, when
+   * it renders.
+   */
+  threads: readonly PluginSidebarThread[];
+}
+
+/**
+ * A small item on a thread row's metadata line, under the title: a badge, not
+ * a control. Items share one line, left to right, and the line clips at the
+ * row's edge. bb's sidebar draws the line only while the `threadRowMetadata`
+ * experiment is on and the user turns on Organize → Rows → Metadata, and only
+ * on rows where an item shows something.
+ * Load the line's data in `useData`, a React hook bb calls once for the
+ * whole app while any list draws a metadata line, never per row; it
+ * receives every thread a list may show, so read them in one batch (for
+ * example one `experimental_useRpcKeyedQuery` over their keys). The
+ * component is then a pure render of its thread and `data`; with `useData`
+ * it first renders once `useData` has returned. A row that renders already
+ * has its data, so rows keep their height as they scroll into view.
+ * It hides the line while the row is renamed or customized and keeps it
+ * visible on hover. Render null to show nothing for a thread. Keep
+ * it to an icon and a few characters with a tooltip; clicks on it open the
+ * thread like the rest of the row. A crash removes only this item for that
+ * row.
+ */
+export interface ExperimentalThreadRowMetadataRegistration<Data = undefined> {
+  /** Unique within the plugin; letters, digits, `-`, `_`. */
+  id: string;
+  /**
+   * Items sort by `order` (unset sorts last), then registration order. The
+   * first item starts the line.
+   */
+  order?: number;
+  useData?(input: ExperimentalThreadRowMetadataDataInput): Data;
+  component: ComponentType<ExperimentalThreadRowMetadataProps<Data>>;
+}
+
+/** Props for {@link PluginSdkApp.experimental_ThreadRowMetadata}. */
+export interface ExperimentalThreadRowMetadataLineProps {
+  thread: PluginSidebarThread;
+}
+
+/**
  * Props passed to an `experimental_threadInfoRow` or
  * `experimental_threadInfoSection` component, rendered in a thread's Info tab.
  */
@@ -3492,6 +3553,15 @@ export interface PluginAppSlots {
     registration: ExperimentalThreadContextSegmentRegistration,
   ): void;
   /**
+   * Add a small item to the metadata line of every thread row in thread
+   * lists (see
+   * {@link ExperimentalThreadRowMetadataRegistration}). Experimental: see
+   * docs/api_to_audit.md.
+   */
+  experimental_threadRowMetadata<Data = undefined>(
+    registration: ExperimentalThreadRowMetadataRegistration<Data>,
+  ): void;
+  /**
    * Add a row to the thread Info tab's details block (see
    * {@link ExperimentalThreadInfoRowRegistration}). Experimental: see
    * docs/api_to_audit.md.
@@ -4919,7 +4989,7 @@ export interface ExperimentalRpcQueryState<T> {
   isLoading: boolean;
   /** A read attempt is active, including background refreshes. Keyed consumers share this activity for their method; offline-paused reads are not fetching. */
   isFetching: boolean;
-  /** Force a read regardless of freshness and wait for its attempt/retries. Keyed reads refresh the method's subscribed keys. Failures update error and retain data; this promise resolves rather than rejecting. */
+  /** Force a read regardless of freshness and wait for its attempt/retries. Keyed reads refresh only this hook's keys, batched with other hooks refreshing in the same render. Failures update error and retain data; this promise resolves rather than rejecting. */
   refetch(): Promise<void>;
 }
 
@@ -5041,7 +5111,7 @@ export interface PluginSdkApp {
   >(
     options: ExperimentalRpcMutationOptions<Contract, Method>,
   ): ExperimentalRpcMutationState<Contract[Method]>;
-  /** Cache each key independently and batch missing or invalidated keys in the same render. */
+  /** Cache each key independently and batch missing or invalidated keys in the same render. Each key is watched once while the hook holds it, so a changing key list subscribes only added keys and releases only removed ones. */
   experimental_useRpcKeyedQuery<
     Contract extends PluginRpcContract,
     Method extends ExperimentalRpcKeyedMethod<Contract>,
@@ -5364,6 +5434,15 @@ export interface PluginSdkApp {
    * Experimental: see docs/api_to_audit.md.
    */
   experimental_ThreadStatusGlyph: ComponentType<PluginThreadStatusGlyphProps>;
+  /**
+   * Every `experimental_threadRowMetadata` contribution for one thread row (see
+   * {@link ExperimentalThreadRowMetadataRegistration}), the items bb's sidebar
+   * draws on its rows' metadata line. Render it under your row's title, in
+   * a flex parent as wide as the line. Badges such as a pull request's status then appear on your rows as they do on
+   * bb's. It renders nothing when no plugin contributes an item.
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_ThreadRowMetadata: ComponentType<ExperimentalThreadRowMetadataLineProps>;
   /**
    * bb's environment provider catalog (see
    * {@link PluginEnvironmentProvidersState}), the directory a thread's
