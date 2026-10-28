@@ -6,6 +6,7 @@ import {
   usePluginComposerHost,
 } from "@/components/plugin/plugin-composer-host";
 import { SecondaryPanelLayout } from "@/components/secondary-panel/SecondaryPanelLayout";
+import { getThreadSecondaryPanelWidthPercentAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { LazyThreadSecondaryPanel } from "@/components/secondary-panel/lazySecondaryPanelComponents";
 import {
   ThreadMetadataCard,
@@ -126,6 +127,9 @@ function ThreadDetailSecondaryContentBody({
           onToggle: onToggleConversationCollapse,
         }}
         composerHost={composerHost}
+        widthPercentAtom={getThreadSecondaryPanelWidthPercentAtom(
+          metadata.thread.id,
+        )}
         renderHostedPanel={renderHostedPanel}
         renderPanel={({
           presentation,
